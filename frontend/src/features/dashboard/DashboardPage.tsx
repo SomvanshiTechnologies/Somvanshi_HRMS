@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { EmployeeDashboard } from "./EmployeeDashboard";
 import { useNotifications } from "@/features/notifications/useNotifications";
 import { apiErrorMessage } from "@/lib/api";
 import { compactINR, cn, formatDate, formatDateTime, initials } from "@/lib/utils";
@@ -158,6 +159,13 @@ function CelebrationsRow() {
 
 /* ---------- page ---------- */
 export function DashboardPage() {
+  const { can } = usePermissions();
+  // Role-aware: leadership/HR/managers (analytics access) get the org dashboard;
+  // everyone else gets a personal self-service dashboard.
+  return can("analytics:read", "analytics:read_all") ? <LeadershipDashboard /> : <EmployeeDashboard />;
+}
+
+function LeadershipDashboard() {
   const user = useAuthStore((s) => s.user);
   const { can } = usePermissions();
   const overview = useOverview();

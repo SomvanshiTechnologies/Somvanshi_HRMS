@@ -140,6 +140,7 @@ export const ALL_PERMISSIONS: PermissionCode[] = Object.values(PERMISSIONS);
 
 export const ROLES = {
   SUPER_ADMIN: "SUPER_ADMIN",
+  CEO: "CEO",
   HR_ADMIN: "HR_ADMIN",
   HR_EXECUTIVE: "HR_EXECUTIVE",
   RECRUITER: "RECRUITER",
@@ -198,6 +199,37 @@ const PEOPLE_LEAD_EXTRAS: PermissionCode[] = [
 /** Seed defaults — Super Admin can re-wire at runtime via Role Management. */
 export const ROLE_PERMISSION_MATRIX: Record<RoleName, PermissionCode[]> = {
   SUPER_ADMIN: ALL_PERMISSIONS,
+
+  // Leadership: org-wide visibility + final approvals + company comms + audit.
+  // NOT platform admin (no roles/users/settings) and NOT HR operations (can't edit
+  // employees, run payroll, or manage recruitment — they observe & approve).
+  CEO: [
+    ...SELF_SERVICE,
+    P.EMPLOYEES_READ_ALL,
+    P.EMPLOYEES_EXPORT,
+    P.ATTENDANCE_READ_ALL,
+    P.LEAVE_READ_ALL,
+    P.LEAVE_APPROVE,
+    P.PAYROLL_READ_ALL,
+    P.RECRUITMENT_READ,
+    P.RECRUITMENT_APPROVE,
+    P.ONBOARDING_READ,
+    P.PERFORMANCE_READ_ALL,
+    P.PERFORMANCE_APPROVE,
+    P.ASSETS_READ_ALL,
+    P.HELPDESK_UPDATE,
+    P.EXPENSE_READ_ALL,
+    P.EXPENSE_APPROVE,
+    P.EXIT_READ_ALL,
+    P.EXIT_APPROVE,
+    P.COMPLIANCE_READ_ALL,
+    P.EOD_READ_ALL,
+    P.RECOGNITION_MANAGE,
+    P.ANNOUNCEMENT_MANAGE,
+    P.ANALYTICS_READ,
+    P.ANALYTICS_READ_ALL,
+    P.AUDIT_READ_ALL,
+  ],
 
   HR_ADMIN: [
     ...SELF_SERVICE,
@@ -326,6 +358,7 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleName, PermissionCode[]> = {
 
 export const ROLE_DISPLAY: Record<RoleName, { displayName: string; description: string }> = {
   SUPER_ADMIN: { displayName: "Super Admin", description: "Full platform control including settings, roles and audit" },
+  CEO: { displayName: "CEO", description: "Executive: org-wide analytics, people overview and final approvals — no platform administration" },
   HR_ADMIN: { displayName: "HR Admin", description: "Administers all HR modules org-wide" },
   HR_EXECUTIVE: { displayName: "HR Executive", description: "Day-to-day HR operations: employees, attendance, leave, onboarding" },
   RECRUITER: { displayName: "Recruiter", description: "Owns the recruitment pipeline and candidate management" },
