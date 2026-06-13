@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+/* ====================================================================
+   SomHR Design Tokens — Somvanshi Technologies
+   Tailwind CSS v4, CSS-first. Every color, radius, shadow and font in
+   the app derives from these tokens. Dark mode remaps the semantic
+   layer; brand hues stay constant.
+   ==================================================================== */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* brand */
+  --brand-primary: #0a3d62;
+  --brand-primary-hover: #0c4a78;
+  --brand-primary-active: #082f4c;
+  --brand-secondary: #071b35;
+
+  /* semantic — light */
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f1f5f9;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+  --text-inverse: #f8fafc;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --ring: #0a3d62;
+
+  --primary-foreground: #ffffff;
+  --sidebar: #071b35;
+  --sidebar-hover: #0a3d62;
+  --sidebar-active: #123a63;
+  --sidebar-text: #94a3b8;
+  --sidebar-text-active: #ffffff;
+
+  --success: #22c55e;
+  --success-bg: #f0fdf4;
+  --warning: #f59e0b;
+  --warning-bg: #fffbeb;
+  --danger: #ef4444;
+  --danger-bg: #fef2f2;
+  --info: #3b82f6;
+  --info-bg: #eff6ff;
+
+  --chart-1: #0a3d62;
+  --chart-2: #2e86ab;
+  --chart-3: #63b0cd;
+  --chart-4: #f59e0b;
+  --chart-5: #22c55e;
+  --chart-6: #8b5cf6;
+}
+
+.dark {
+  --bg: #0b1220;
+  --surface: #111a2c;
+  --surface-raised: #162035;
+  --surface-sunken: #0d1526;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+  --text-inverse: #1e293b;
+  --border: #1e293b;
+  --border-strong: #334155;
+  --ring: #63b0cd;
+
+  --sidebar: #0a101d;
+  --sidebar-hover: #131e33;
+  --sidebar-active: #0a3d62;
+  --sidebar-text: #7c8aa0;
+  --sidebar-text-active: #ffffff;
+
+  --success-bg: rgb(5 46 22 / 0.4);
+  --warning-bg: rgb(69 38 5 / 0.4);
+  --danger-bg: rgb(69 9 9 / 0.4);
+  --info-bg: rgb(11 37 74 / 0.4);
+}
+
+@theme inline {
+  --color-primary: var(--brand-primary);
+  --color-primary-hover: var(--brand-primary-hover);
+  --color-primary-active: var(--brand-primary-active);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--brand-secondary);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-text-inverse: var(--text-inverse);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-text-active: var(--sidebar-text-active);
+
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+  --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.04);
+  --shadow-overlay: 0 20px 50px -12px rgb(15 23 42 / 0.25);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-bg text-text font-sans text-sm;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--brand-primary);
+    color: #fff;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+}

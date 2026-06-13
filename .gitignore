@@ -1,0 +1,40 @@
+# ── dependencies ──
+node_modules/
+**/node_modules/
+
+# ── environment & secrets (NEVER commit) ──
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# ── build output ──
+dist/
+**/dist/
+build/
+**/build/
+*.tsbuildinfo
+
+# ── Prisma generated client (regenerated via `prisma generate`) ──
+backend/src/generated/
+
+# ── runtime uploads ──
+uploads/
+
+# ── logs ──
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ── OS / editor ──
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.local
+*.suo
