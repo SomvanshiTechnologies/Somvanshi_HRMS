@@ -34,7 +34,7 @@ export function JobsPage() {
 
   const [publishFor, setPublishFor] = React.useState<Record<string, any> | null>(null);
   const [jobDescription, setJobDescription] = React.useState("");
-  const [location, setLocation] = React.useState("Pune");
+  const [location, setLocation] = React.useState("");
   const [isRemote, setIsRemote] = React.useState(false);
 
   return (

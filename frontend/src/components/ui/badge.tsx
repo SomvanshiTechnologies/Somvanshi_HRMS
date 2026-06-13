@@ -2,17 +2,18 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+// Atlassian "Lozenge" — compact, bold, uppercase status indicator (subtle bg, no border).
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap",
+  "inline-flex items-center gap-1 rounded-[3px] px-1.5 py-px text-[11px] font-bold uppercase leading-4 tracking-[0.02em] whitespace-nowrap",
   {
     variants: {
       variant: {
-        default: "bg-surface-sunken text-text-muted border border-border",
-        primary: "bg-primary/10 text-primary border border-primary/20 dark:text-chart-3",
-        success: "bg-success-bg text-success border border-success/25",
-        warning: "bg-warning-bg text-warning border border-warning/25",
-        danger: "bg-danger-bg text-danger border border-danger/25",
-        info: "bg-info-bg text-info border border-info/25",
+        default: "bg-lz-neutral-bg text-lz-neutral-fg",
+        primary: "bg-lz-brand-bg text-lz-brand-fg",
+        success: "bg-lz-success-bg text-lz-success-fg",
+        warning: "bg-lz-warning-bg text-lz-warning-fg",
+        danger: "bg-lz-danger-bg text-lz-danger-fg",
+        info: "bg-lz-info-bg text-lz-info-fg",
       },
     },
     defaultVariants: { variant: "default" },

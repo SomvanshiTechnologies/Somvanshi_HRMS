@@ -431,16 +431,14 @@ export function MyProfilePage() {
 
   return (
     <div className="space-y-4">
-      {/* hero */}
+      {/* hero — thin brand accent strip, all content on the white surface (always legible) */}
       <Card className="overflow-hidden rounded-xl">
-        <div className="relative h-24 lg:h-32 bg-gradient-to-r from-secondary via-primary to-(--chart-2)">
-          <div className="absolute inset-0 opacity-25" style={{ background: "radial-gradient(30rem 16rem at 80% -30%, #63b0cd 0%, transparent 60%)" }} aria-hidden />
-        </div>
-        <CardContent className="p-5 pt-0">
-          <div className="flex flex-wrap items-end justify-between gap-4 -mt-10">
-            <div className="flex items-end gap-4">
-              <div className="relative">
-                <Avatar size="xl" className="ring-4 ring-surface shadow-raised">
+        <div className="h-1.5 bg-gradient-to-r from-secondary via-primary to-(--chart-2)" aria-hidden />
+        <CardContent className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="relative shrink-0">
+                <Avatar size="xl" className="ring-2 ring-border shadow-card">
                   {p.photoUrl && <AvatarImage src={p.photoUrl} alt="" />}
                   <AvatarFallback className="text-2xl">{initials(p.firstName, p.lastName)}</AvatarFallback>
                 </Avatar>
@@ -463,7 +461,7 @@ export function MyProfilePage() {
                   }}
                 />
               </div>
-              <div className="pb-1">
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-xl font-semibold text-text">
                     {p.firstName} {p.lastName}
@@ -473,9 +471,16 @@ export function MyProfilePage() {
                 <p className="text-sm text-text-muted">
                   {p.designation?.title ?? "—"} · {p.department?.name ?? "—"}
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge className="font-mono">{p.employeeCode}</Badge>
+                  <Badge>{p.email}</Badge>
+                  {p.dateOfJoining && <Badge variant="primary">Joined {formatDate(p.dateOfJoining)}</Badge>}
+                  {p.manager && <Badge variant="info">Reports to {p.manager.firstName} {p.manager.lastName}</Badge>}
+                  {p.location && <Badge>{p.location.name}</Badge>}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-4 pb-1">
+            <div className="flex items-center gap-3 rounded-lg bg-surface-sunken px-4 py-3">
               <CompletionRing score={p.completion.score} />
               <div className="text-sm">
                 <p className="font-medium text-text">Profile completion</p>
@@ -484,18 +489,6 @@ export function MyProfilePage() {
                 </p>
               </div>
             </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Badge className="font-mono">{p.employeeCode}</Badge>
-            <Badge>{p.email}</Badge>
-            {p.dateOfJoining && <Badge variant="primary">Joined {formatDate(p.dateOfJoining)}</Badge>}
-            {p.manager && (
-              <Badge variant="info">
-                Reports to {p.manager.firstName} {p.manager.lastName}
-              </Badge>
-            )}
-            {p.location && <Badge>{p.location.name}</Badge>}
           </div>
         </CardContent>
       </Card>
@@ -519,8 +512,8 @@ export function MyProfilePage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* completion checklist + alerts */}
-        <div className="space-y-4">
+        {/* completion checklist + alerts — RIGHT column (offset down to align with tab content) */}
+        <div className="space-y-4 order-1 lg:order-2 lg:mt-15">
           <Card className="rounded-xl">
             <CardHeader>
               <CardTitle className="text-sm">Complete your profile</CardTitle>
@@ -533,12 +526,12 @@ export function MyProfilePage() {
                   ) : (
                     <Circle className="size-4 mt-0.5 text-text-faint shrink-0" />
                   )}
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className={cn("font-medium capitalize", section.complete ? "text-text-muted line-through" : "text-text")}>
                       {key.replace(/([A-Z])/g, " $1").toLowerCase()}
                       <span className="ml-1.5 text-[11px] text-text-faint">+{section.weight}%</span>
                     </p>
-                    {!section.complete && <p className="text-xs text-text-muted">{section.hint}</p>}
+                    {!section.complete && <p className="text-xs text-text-muted break-words">{section.hint}</p>}
                   </div>
                 </div>
               ))}
@@ -581,8 +574,8 @@ export function MyProfilePage() {
           )}
         </div>
 
-        {/* main sections */}
-        <div className="lg:col-span-2">
+        {/* main sections — LEFT column */}
+        <div className="lg:col-span-2 lg:order-1">
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview"><Briefcase /> Overview</TabsTrigger>
