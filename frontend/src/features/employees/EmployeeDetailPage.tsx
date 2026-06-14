@@ -151,18 +151,21 @@ export function EmployeeDetailPage() {
     <div className="space-y-4">
       {/* ============ EMPLOYEE HEADER CARD ============ */}
       <Card className="rounded-xl">
-        <CardContent className="p-5">
-          <div className="flex flex-wrap items-start gap-4">
-            <Button variant="ghost" size="icon-sm" onClick={() => navigate(-1)} aria-label="Back" className="mt-1">
-              <ArrowLeft />
-            </Button>
+        <CardContent className="p-4 sm:p-5">
+          {/* back — own row, top-left on every size */}
+          <Button variant="ghost" size="icon-sm" onClick={() => navigate(-1)} aria-label="Back" className="-ml-1 mb-2">
+            <ArrowLeft />
+          </Button>
+
+          {/* identity — centered on mobile, horizontal from sm up */}
+          <div className="flex flex-col items-center text-center gap-3 sm:flex-row sm:items-start sm:text-left sm:gap-4">
             <Avatar size="xl" className="ring-2 ring-border shrink-0">
               {e["photoUrl"] && <AvatarImage src={e["photoUrl"]} alt="" />}
               <AvatarFallback className="text-xl">{initials(e["firstName"], e["lastName"])}</AvatarFallback>
             </Avatar>
 
-            <div className="flex-1 min-w-48">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 w-full sm:flex-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <h1 className="text-xl font-semibold text-text">{e["firstName"]} {e["lastName"]}</h1>
                 <Badge variant={statusVariant(e["status"])}>{e["status"]}</Badge>
                 {bday && <Badge variant="warning"><Cake className="size-3" /> {bday.today ? "Birthday today" : `Birthday ${bday.label}`}</Badge>}
@@ -170,10 +173,10 @@ export function EmployeeDetailPage() {
               </div>
               <p className="text-sm text-text-muted mt-0.5">{e["designation"]?.title ?? "—"} · {e["department"]?.name ?? "—"}</p>
               {/* identity chips — everything visible immediately */}
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <div className="mt-2.5 flex flex-wrap justify-center gap-1.5 sm:justify-start">
                 <Badge className="font-mono">{e["employeeCode"]}</Badge>
                 <Badge>{(e["employmentType"] as string)?.replace("_", " ")}</Badge>
-                <Badge><Mail className="size-3" /> {e["email"]}</Badge>
+                <Badge className="max-w-full"><Mail className="size-3 shrink-0" /> <span className="truncate min-w-0">{e["email"]}</span></Badge>
                 {e["phone"] && <Badge><Phone className="size-3" /> {e["phone"]}</Badge>}
                 {e["location"] && <Badge><MapPin className="size-3" /> {e["location"].name}</Badge>}
                 {e["dateOfJoining"] && <Badge variant="primary"><CalendarDays className="size-3" /> Joined {formatDate(e["dateOfJoining"])}</Badge>}
@@ -182,18 +185,18 @@ export function EmployeeDetailPage() {
             </div>
           </div>
 
-          {/* quick actions */}
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3.5">
+          {/* quick actions — full-width 2-col grid on mobile, inline row from sm up */}
+          <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-3.5 sm:flex sm:flex-wrap">
             {can("employees:update", "employees:manage") && (
-              <Button size="sm" asChild><Link to={`/employees/${id}/edit`}><Pencil /> Edit Profile</Link></Button>
+              <Button size="sm" asChild className="col-span-2 w-full sm:col-auto sm:w-auto"><Link to={`/employees/${id}/edit`}><Pencil /> Edit Profile</Link></Button>
             )}
-            {can("attendance:read_all") && <Button variant="secondary" size="sm" asChild><Link to="/attendance"><CalendarCheck2 /> Attendance</Link></Button>}
-            {can("payroll:read_all") && <Button variant="secondary" size="sm" asChild><Link to="/payroll"><Wallet /> Payroll</Link></Button>}
-            {can("assets:assign", "assets:manage") && <Button variant="secondary" size="sm" asChild><Link to="/assets"><MonitorSmartphone /> Assign Asset</Link></Button>}
+            {can("attendance:read_all") && <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto"><Link to="/attendance"><CalendarCheck2 /> Attendance</Link></Button>}
+            {can("payroll:read_all") && <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto"><Link to="/payroll"><Wallet /> Payroll</Link></Button>}
+            {can("assets:assign", "assets:manage") && <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto"><Link to="/assets"><MonitorSmartphone /> Assign Asset</Link></Button>}
             {can("employees:manage") && allowedTransitions.length > 0 && (
-              <Button variant="secondary" size="sm" onClick={() => setLifecycleOpen(true)}><UserCog /> Lifecycle</Button>
+              <Button variant="secondary" size="sm" className="w-full sm:w-auto" onClick={() => setLifecycleOpen(true)}><UserCog /> Lifecycle</Button>
             )}
-            <Button variant="secondary" size="sm" onClick={() => window.print()}><Download /> Summary</Button>
+            <Button variant="secondary" size="sm" className="w-full sm:w-auto" onClick={() => window.print()}><Download /> Summary</Button>
           </div>
         </CardContent>
       </Card>

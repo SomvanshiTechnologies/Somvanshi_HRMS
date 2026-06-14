@@ -381,7 +381,7 @@ export function ExitPage() {
           ].map((c) => (
             <Card key={c.label} className="rounded-xl p-4">
               <div className="flex items-center justify-between">
-                <p className={cn("text-xl font-semibold tabular-nums", c.accent)}>{summary.isLoading ? <Skeleton className="h-7 w-10" /> : c.value ?? 0}</p>
+                <div className={cn("text-xl font-semibold tabular-nums", c.accent)}>{summary.isLoading ? <Skeleton className="h-7 w-10" /> : c.value ?? 0}</div>
                 <c.icon className="size-4 text-text-faint" />
               </div>
               <p className="text-[11px] uppercase tracking-wide text-text-muted mt-0.5">{c.label}</p>

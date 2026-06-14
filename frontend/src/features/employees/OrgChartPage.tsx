@@ -71,7 +71,7 @@ function Analytics() {
       {cards.map((c) => (
         <Card key={c.label} className="rounded-xl p-4 flex items-center gap-3">
           <div className={cn("rounded-lg bg-surface-sunken p-2.5", c.accent)}><c.icon className="size-5" /></div>
-          <div><p className={cn("text-xl font-semibold tabular-nums", c.accent)}>{ov.isLoading ? <Skeleton className="h-7 w-8" /> : c.value ?? 0}</p><p className="text-[10px] uppercase tracking-wide text-text-muted leading-tight">{c.label}</p></div>
+          <div><div className={cn("text-xl font-semibold tabular-nums", c.accent)}>{ov.isLoading ? <Skeleton className="h-7 w-8" /> : c.value ?? 0}</div><p className="text-[10px] uppercase tracking-wide text-text-muted leading-tight">{c.label}</p></div>
         </Card>
       ))}
     </div>

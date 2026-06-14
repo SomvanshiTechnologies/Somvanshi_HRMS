@@ -271,7 +271,7 @@ export function ExpensePage() {
             { label: "Reimbursed (total)", value: summary.data ? inr(summary.data.reimbursedAmount) : undefined, accent: "text-info" },
           ].map((c) => (
             <Card key={c.label} className="rounded-xl p-4">
-              <p className={cn("text-xl font-semibold tabular-nums", c.accent)}>{summary.isLoading ? <Skeleton className="h-7 w-14" /> : c.value ?? 0}</p>
+              <div className={cn("text-xl font-semibold tabular-nums", c.accent)}>{summary.isLoading ? <Skeleton className="h-7 w-14" /> : c.value ?? 0}</div>
               <p className="text-[11px] uppercase tracking-wide text-text-muted mt-0.5">{c.label}</p>
             </Card>
           ))}

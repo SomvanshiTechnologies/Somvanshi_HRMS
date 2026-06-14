@@ -199,7 +199,7 @@ function DashboardTab() {
           { label: "Missed today", value: d?.missedToday, accent: "text-danger" },
           { label: "Reports this week", value: d?.reportsThisWeek, accent: "text-primary dark:text-chart-3" },
         ].map((c) => (
-          <Card key={c.label} className="rounded-xl p-4"><p className={cn("text-xl font-semibold tabular-nums", c.accent)}>{dash.isLoading ? <Skeleton className="h-7 w-12" /> : c.value ?? 0}</p><p className="text-[11px] uppercase tracking-wide text-text-muted">{c.label}</p></Card>
+          <Card key={c.label} className="rounded-xl p-4"><div className={cn("text-xl font-semibold tabular-nums", c.accent)}>{dash.isLoading ? <Skeleton className="h-7 w-12" /> : c.value ?? 0}</div><p className="text-[11px] uppercase tracking-wide text-text-muted">{c.label}</p></Card>
         ))}
       </div>
       <Card className="rounded-xl p-4">

@@ -98,7 +98,7 @@ function OverviewTab() {
         <Card key={c.label} className="rounded-xl p-4 flex items-center gap-3.5">
           <div className={cn("rounded-lg bg-surface-sunken p-2.5", c.accent)}><c.icon className="size-5" /></div>
           <div>
-            <p className={cn("text-xl font-semibold tabular-nums", c.accent)}>{summary.isLoading ? <Skeleton className="h-7 w-12" /> : c.value ?? 0}</p>
+            <div className={cn("text-xl font-semibold tabular-nums", c.accent)}>{summary.isLoading ? <Skeleton className="h-7 w-12" /> : c.value ?? 0}</div>
             <p className="text-[11px] uppercase tracking-wide text-text-muted">{c.label}</p>
             <p className="text-[11px] text-text-faint">{c.sub}</p>
           </div>
@@ -233,7 +233,7 @@ function RegistersTab() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[{ k: "pf", l: "Provident Fund" }, { k: "pt", l: "Professional Tax" }, { k: "esi", l: "ESI" }, { k: "tds", l: "TDS" }].map((t) => (
           <Card key={t.k} className="rounded-xl p-4">
-            <p className="text-lg font-semibold text-text tabular-nums">{reg.isLoading ? <Skeleton className="h-6 w-16" /> : inr(d?.totals[t.k as "pf"] ?? 0)}</p>
+            <div className="text-lg font-semibold text-text tabular-nums">{reg.isLoading ? <Skeleton className="h-6 w-16" /> : inr(d?.totals[t.k as "pf"] ?? 0)}</div>
             <p className="text-[11px] uppercase tracking-wide text-text-muted">{t.l}</p>
           </Card>
         ))}

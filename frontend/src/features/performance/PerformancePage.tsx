@@ -352,7 +352,7 @@ function DashboardTab({ cycleId }: { cycleId: string }) {
           { label: "Goal completion", value: dd ? `${dd.goalCompletionPct}%` : undefined, accent: "text-success" },
           { label: "Promotion candidates", value: dd?.promotionCandidates, accent: "text-info" },
         ].map((c) => (
-          <Card key={c.label} className="rounded-xl p-4"><p className={cn("text-xl font-semibold tabular-nums", c.accent)}>{d.isLoading ? <Skeleton className="h-7 w-12" /> : c.value ?? 0}</p><p className="text-[11px] uppercase tracking-wide text-text-muted">{c.label}</p></Card>
+          <Card key={c.label} className="rounded-xl p-4"><div className={cn("text-xl font-semibold tabular-nums", c.accent)}>{d.isLoading ? <Skeleton className="h-7 w-12" /> : c.value ?? 0}</div><p className="text-[11px] uppercase tracking-wide text-text-muted">{c.label}</p></Card>
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">

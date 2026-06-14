@@ -63,6 +63,12 @@ export function AppLayout() {
   // hydrate /auth/me (fresh permissions) once authenticated
   const me = useMe(session === "authenticated");
 
+  // every navigation should land at the top of the page (not wherever the
+  // previous page was scrolled to)
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname]);
+
   if (session === "checking" || (session === "authenticated" && !user && me.isLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg">
@@ -101,7 +107,7 @@ export function AppLayout() {
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onMobileMenu={() => setMobileOpen(true)} />
-          <main className="flex-1 p-4 lg:p-6 max-w-[1800px] w-full mx-auto">
+          <main className="flex-1 p-4 lg:p-6 max-w-[1800px] w-full mx-auto min-w-0 overflow-x-hidden">
             <Outlet />
           </main>
           <footer className="border-t border-border px-6 py-3 text-center text-xs text-text-faint">
