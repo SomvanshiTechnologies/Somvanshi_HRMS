@@ -290,9 +290,9 @@ function LeadershipDashboard() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-3 text-2xl font-semibold text-text tabular-nums">
+                    <div className="mt-3 text-2xl font-semibold text-text tabular-nums">
                       {overview.isLoading ? <Skeleton className="h-8 w-20" /> : card.value ?? "—"}
-                    </p>
+                    </div>
                     <p className="text-xs text-text-muted mt-0.5">
                       {card.label} · {card.hint}
                     </p>
@@ -318,7 +318,7 @@ function LeadershipDashboard() {
             onRetry={() => headcount.refetch()}
             height={210}
           >
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={210} minWidth={0}>
               <AreaChart data={hc} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="hcFill" x1="0" y1="0" x2="0" y2="1">
@@ -344,7 +344,7 @@ function LeadershipDashboard() {
             onRetry={() => headcount.refetch()}
             height={210}
           >
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={210} minWidth={0}>
               <BarChart data={hc} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <CartesianGrid stroke={chartStroke} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" tick={tickStyle} axisLine={false} tickLine={false} />
@@ -366,7 +366,7 @@ function LeadershipDashboard() {
             onRetry={() => attrition.refetch()}
             height={210}
           >
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={210} minWidth={0}>
               <LineChart data={attrition.data ?? []} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <CartesianGrid stroke={chartStroke} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" tick={tickStyle} axisLine={false} tickLine={false} />

@@ -82,7 +82,7 @@ export function ReportsPage() {
           isLoading={headcount.isLoading} error={headcount.error} onRetry={() => headcount.refetch()}
           action={<Button variant="ghost" size="icon-sm" aria-label="Export" onClick={() => exportSeriesCsv("headcount.csv", headcount.data ?? [])}><Download /></Button>}
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
             <AreaChart data={headcount.data ?? []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
               <defs><linearGradient id="rhc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0.02} /></linearGradient></defs>
               <CartesianGrid stroke={stroke} strokeDasharray="3 3" vertical={false} />
@@ -94,7 +94,7 @@ export function ReportsPage() {
         </ChartCard>
 
         <ChartCard title="Attrition Trend" description="Monthly attrition %" isLoading={attrition.isLoading} error={attrition.error} onRetry={() => attrition.refetch()}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
             <LineChart data={attrition.data ?? []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
               <CartesianGrid stroke={stroke} strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="month" tick={tick} axisLine={false} tickLine={false} /><YAxis tick={tick} axisLine={false} tickLine={false} unit="%" />
@@ -106,7 +106,7 @@ export function ReportsPage() {
 
         {/* attendance composition */}
         <ChartCard title="Attendance Composition" description="Monthly present / leave / absent" isLoading={attendanceTrend.isLoading} error={attendanceTrend.error} onRetry={() => attendanceTrend.refetch()}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
             <BarChart data={attendanceTrend.data ?? []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
               <CartesianGrid stroke={stroke} strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="month" tick={tick} axisLine={false} tickLine={false} /><YAxis tick={tick} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -119,7 +119,7 @@ export function ReportsPage() {
         {/* leave trends */}
         <ChartCard title="Leave Trends" description="Days taken per month by type" isLoading={leaveTrends.isLoading} error={leaveTrends.error} onRetry={() => leaveTrends.refetch()}
           action={<Button variant="ghost" size="icon-sm" aria-label="Export" onClick={() => exportSeriesCsv("leave-trends.csv", leaveTrends.data?.points ?? [])}><Download /></Button>}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
             <BarChart data={leaveTrends.data?.points ?? []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
               <CartesianGrid stroke={stroke} strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="month" tick={tick} axisLine={false} tickLine={false} /><YAxis tick={tick} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -136,7 +136,7 @@ export function ReportsPage() {
           {funnelData.every((d) => d.value === 0) ? (
             <div className="flex h-full items-center justify-center text-sm text-text-faint">No candidates in the pipeline yet.</div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={280} minWidth={0}>
               <FunnelChart><ChartTooltip contentStyle={tip} />
                 <Funnel dataKey="value" data={funnelData} isAnimationActive>
                   <LabelList position="right" fill="var(--color-text)" stroke="none" dataKey="name" fontSize={11} />
@@ -150,7 +150,7 @@ export function ReportsPage() {
         {canPayroll && (
           <ChartCard title="Payroll Cost Trend" description="Net payout per month" isLoading={payrollTrend.isLoading} error={payrollTrend.error} onRetry={() => payrollTrend.refetch()}
             action={<Button variant="ghost" size="icon-sm" aria-label="Export" onClick={() => exportSeriesCsv("payroll-trend.csv", payrollTrend.data ?? [])}><Download /></Button>}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={280} minWidth={0}>
               <AreaChart data={payrollTrend.data ?? []} margin={{ top: 4, right: 8, left: 6, bottom: 0 }}>
                 <defs><linearGradient id="rpay" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--color-chart-2)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--color-chart-2)" stopOpacity={0.02} /></linearGradient></defs>
                 <CartesianGrid stroke={stroke} strokeDasharray="3 3" vertical={false} />
@@ -164,7 +164,7 @@ export function ReportsPage() {
 
         {!canPayroll && (
           <ChartCard title="Hiring Trend" description="Applications, offers and joins" isLoading={hiringTrend.isLoading} error={hiringTrend.error} onRetry={() => hiringTrend.refetch()}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={280} minWidth={0}>
               <BarChart data={hiringTrend.data ?? []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
                 <CartesianGrid stroke={stroke} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" tick={tick} axisLine={false} tickLine={false} /><YAxis tick={tick} axisLine={false} tickLine={false} allowDecimals={false} />
