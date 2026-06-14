@@ -42,6 +42,22 @@ export const CreateChangeRequestSchema = z
     }
   });
 
+/** Personal info — applies immediately (self-service, audited). Partial update. */
+export const PersonalInfoSchema = z
+  .object({
+    personalEmail: z.email().nullable(),
+    phone: z.string().min(6).max(20).nullable(),
+    altPhone: z.string().min(6).max(20).nullable(),
+    currentAddress: z.string().max(1000).nullable(),
+    permanentAddress: z.string().max(1000).nullable(),
+    bloodGroup: z.string().max(8).nullable(),
+    maritalStatus: z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]),
+    dateOfBirth: z.coerce.date().nullable(),
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, "No changes provided");
+export type PersonalInfoInput = z.infer<typeof PersonalInfoSchema>;
+
 /** Professional info applies immediately (no approval). */
 export const ProfessionalInfoSchema = z.object({
   languages: z.array(z.string().min(1).max(40)).max(20).optional(),

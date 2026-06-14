@@ -86,3 +86,19 @@ export const useUpdateClearance = () => useExitMutation((input: { id: string; it
 export const useSaveInterview = () => useExitMutation((input: { id: string; conductedAt?: string; sentiment?: string; summary?: string }) => api.post(`/exit/${input.id}/interview`, { conductedAt: input.conductedAt, sentiment: input.sentiment, summary: input.summary }));
 export const useCalcFnf = () => useExitMutation((input: { id: string; pendingSalaryDays: number; noticeRecoveryDays: number; otherEarnings: number; otherDeductions: number }) => api.post(`/exit/${input.id}/fnf/calculate`, input));
 export const useDecideFnf = () => useExitMutation((input: { id: string; action: "APPROVE" | "SETTLE"; relievingLetterUrl?: string; experienceLetterUrl?: string }) => api.patch(`/exit/${input.id}/fnf`, { action: input.action, relievingLetterUrl: input.relievingLetterUrl, experienceLetterUrl: input.experienceLetterUrl }));
+
+export const EXIT_DOC_TYPES = [
+  { type: "acknowledgement", label: "Acknowledgement" },
+  { type: "relieving", label: "Relieving Letter" },
+  { type: "experience", label: "Experience Letter" },
+  { type: "service", label: "Service Certificate" },
+  { type: "no-dues", label: "No-Dues Certificate" },
+  { type: "fnf", label: "F&F Statement" },
+] as const;
+
+/** Open a branded exit document PDF (authenticated blob) in a new tab. */
+export async function openExitDocument(id: string, type: string): Promise<void> {
+  const res = await api.get(`/exit/${id}/documents/${type}`, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data as Blob);
+  window.open(url, "_blank");
+}

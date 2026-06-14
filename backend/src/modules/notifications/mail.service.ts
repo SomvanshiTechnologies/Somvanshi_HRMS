@@ -87,6 +87,25 @@ export const mailService = {
     );
   },
 
+  async sendTempPassword(to: string, name: string, tempPassword: string): Promise<void> {
+    await send(
+      to,
+      "Your SomHR password has been reset",
+      shell(`
+        <h2 style="margin:0 0 12px;color:#111827">Password reset approved</h2>
+        <p>Hi ${name}, an administrator approved your password reset request. Sign in with this temporary password:</p>
+        <p style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:12px 16px">
+          <strong>Email:</strong> ${to}<br/>
+          <strong>Temporary password:</strong> ${tempPassword}
+        </p>
+        <p>For your security you'll be asked to set a new password the moment you sign in. This temporary password works only once.</p>
+        <p style="margin:20px 0">
+          <a href="${env.APP_URL}/login" style="background:#0A3D62;color:#ffffff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600">Sign in to SomHR</a>
+        </p>
+      `)
+    );
+  },
+
   async sendPayslip(to: string, name: string, period: string, pdf: Buffer): Promise<void> {
     try {
       await getTransporter().sendMail({

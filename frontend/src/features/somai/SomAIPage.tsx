@@ -79,7 +79,7 @@ function CommandCenter({ onLaunch }: { onLaunch: (prompt: string) => void }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-5">
+    <div className="flex-1 p-5 space-y-5">
       {/* greeting */}
       <div className="flex items-center gap-3">
         <div className="rounded-2xl bg-gradient-to-br from-primary to-(--chart-2) p-3 text-white shadow-card"><Bot className="size-6" /></div>
@@ -130,27 +130,6 @@ function CommandCenter({ onLaunch }: { onLaunch: (prompt: string) => void }) {
           ))}
         </div>
       </div>
-
-      {/* insights */}
-      {insights.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2 flex items-center gap-1.5"><Sparkles className="size-3.5" /> HR Insights</p>
-          <div className="space-y-2">
-            {insights.map((ins, i) => (
-              <motion.button
-                key={i}
-                initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-                onClick={() => onLaunch(ins.text)}
-                className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-left text-sm hover:shadow-card transition-shadow cursor-pointer"
-              >
-                <span className={cn("size-2 rounded-full shrink-0", ins.tone === "warning" ? "bg-warning" : ins.tone === "success" ? "bg-success" : "bg-info")} />
-                <span className="text-text flex-1">{ins.text}</span>
-                <ArrowRight className="size-3.5 text-text-faint" />
-              </motion.button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* upcoming birthdays mini */}
       {(celebrations.data?.birthdays.length ?? 0) > 0 && (
@@ -210,7 +189,7 @@ export function SomAIPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)]">
+    <div className={cn("flex flex-col", activeId ? "h-[calc(100vh-9rem)]" : "min-h-[calc(100vh-9rem)]")}>
       <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-xl font-semibold text-text flex items-center gap-2"><Bot className="size-5 text-primary dark:text-chart-3" /> Sera</h1>
@@ -222,9 +201,9 @@ export function SomAIPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_15rem] gap-4 flex-1 min-h-0">
+      <div className={cn("grid grid-cols-1 lg:grid-cols-[1fr_15rem] gap-4", activeId && "flex-1 min-h-0")}>
         {/* main: command center OR chat */}
-        <Card className="rounded-xl flex flex-col overflow-hidden min-h-0 order-2 lg:order-1">
+        <Card className={cn("rounded-xl flex flex-col overflow-hidden order-2 lg:order-1", activeId && "min-h-0")}>
           {activeId ? (
             <ChatThread ref={threadRef} conversationId={activeId} onTitle={() => conversations.refetch()} />
           ) : (

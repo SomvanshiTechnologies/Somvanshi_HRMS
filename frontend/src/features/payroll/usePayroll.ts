@@ -65,6 +65,8 @@ export const useMyPayslips = () =>
 export interface PayslipLineItem { label: string; code: string; amount: number }
 export interface PayslipDetail {
   id: string;
+  payslipNo: string | null;
+  generatedOn: string | null;
   period: { month: number; year: number; label: string };
   status: string;
   payment: { status: string; paidAt: string | null; processedAt: string | null; utr: string | null };

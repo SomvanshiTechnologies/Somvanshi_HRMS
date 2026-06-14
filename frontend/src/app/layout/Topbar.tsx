@@ -40,6 +40,7 @@ const ROUTE_LABELS: Record<string, string> = {
   feed: "Company Feed",
   profile: "My Profile",
   "profile-approvals": "Profile Approvals",
+  "password-resets": "Password Resets",
   employees: "Employees",
   new: "New",
   edit: "Edit",

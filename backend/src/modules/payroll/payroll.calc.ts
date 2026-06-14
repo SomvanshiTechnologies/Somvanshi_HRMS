@@ -10,6 +10,15 @@
  *  - LOP proration = paidDays / calendar days of the month
  */
 
+/**
+ * Company payroll policy toggles. Somvanshi Technologies is not yet running a
+ * structured Basic/HRA/Special-Allowance split or statutory deductions, so the
+ * whole gross is paid as a single line and PF/PT/ESI/TDS are skipped. Flip these
+ * on once PF/ESI/PT registration and a defined CTC structure are in place.
+ */
+export const PAYROLL_FLAT_STRUCTURE = true;
+export const PAYROLL_STATUTORY_DEDUCTIONS = false;
+
 export interface SalaryBreakup {
   basic: number;
   hra: number;
@@ -19,6 +28,9 @@ export interface SalaryBreakup {
 
 export function breakupFromCtc(annualCtc: number): SalaryBreakup {
   const gross = round2(annualCtc / 12);
+  if (PAYROLL_FLAT_STRUCTURE) {
+    return { basic: gross, hra: 0, specialAllowance: 0, gross };
+  }
   const basic = round2(gross * 0.5);
   const hra = round2(basic * 0.5);
   const specialAllowance = round2(gross - basic - hra);

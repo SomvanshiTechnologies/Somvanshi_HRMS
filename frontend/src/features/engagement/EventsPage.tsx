@@ -147,7 +147,7 @@ function WallTab({ onGive }: { onGive: () => void }) {
         <Select value={scope} onValueChange={(v) => setScope(v as typeof scope)}>
           <SelectTrigger className="w-44 h-9" aria-label="Scope"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="feed">Company wall</SelectItem>
+            <SelectItem value="feed">All recognition</SelectItem>
             <SelectItem value="received">Received by me</SelectItem>
             <SelectItem value="given">Given by me</SelectItem>
           </SelectContent>

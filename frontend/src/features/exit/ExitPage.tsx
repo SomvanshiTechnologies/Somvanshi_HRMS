@@ -5,11 +5,14 @@ import {
   LogOut, MessageSquareText, Plus, ShieldCheck, Wallet,
 } from "lucide-react";
 import {
+  EXIT_DOC_TYPES, openExitDocument,
   RESIGNATION_STATUSES, useAcceptResignation, useCalcFnf, useDecideFnf,
   useExitSummary, useResignation, useResignations, useRetractResignation,
   useSaveInterview, useSubmitResignation, useUpdateClearance,
   type ClearanceItem, type Resignation,
 } from "./useExit";
+import { toast } from "sonner";
+import { FileText } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiErrorMessage } from "@/lib/api";
 import { cn, formatDate, formatINR, initials } from "@/lib/utils";
@@ -262,6 +265,24 @@ function DetailSheet({ id, onClose }: { id: string | null; onClose: () => void }
                 <section className="space-y-2">
                   <h4 className="text-sm font-semibold text-text flex items-center gap-1.5"><Wallet className="size-4 text-primary dark:text-chart-3" /> Full &amp; final settlement</h4>
                   <FnfPanel r={r} canManage={canManage} canApprove={canApprove} />
+                </section>
+              )}
+
+              {/* branded exit documents */}
+              {(r.status === "IN_NOTICE" || r.status === "EXITED") && (
+                <section className="space-y-2">
+                  <h4 className="text-sm font-semibold text-text flex items-center gap-1.5"><FileSignature className="size-4 text-primary dark:text-chart-3" /> Exit documents</h4>
+                  <p className="text-xs text-text-muted">Branded PDFs generated from company branding — open in a new tab.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {EXIT_DOC_TYPES.filter((d) => d.type !== "fnf" || Boolean(r.fnf)).map((d) => (
+                      <Button
+                        key={d.type} size="sm" variant="secondary" className="justify-start"
+                        onClick={() => openExitDocument(r.id, d.type).catch((e) => toast.error(apiErrorMessage(e)))}
+                      >
+                        <FileText className="size-3.5" /> {d.label}
+                      </Button>
+                    ))}
+                  </div>
                 </section>
               )}
             </>

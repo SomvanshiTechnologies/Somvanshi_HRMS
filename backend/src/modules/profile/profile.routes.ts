@@ -11,6 +11,7 @@ import { BadRequestError } from "../../core/errors.js";
 import { upload, fileUrl } from "../files/files.routes.js";
 import {
   CreateChangeRequestSchema,
+  PersonalInfoSchema,
   ProfessionalInfoSchema,
   ReviewChangeRequestSchema,
   UploadDocumentSchema,
@@ -23,6 +24,12 @@ profileRouter.use(requireAuth);
 // ---- self-service ----
 
 profileRouter.get("/me", asyncHandler(async (req: Request, res: Response) => void ok(res, await profileService.me(req))));
+
+profileRouter.patch(
+  "/me/personal",
+  validate({ body: PersonalInfoSchema }),
+  asyncHandler(async (req: Request, res: Response) => void ok(res, await profileService.updatePersonal(req, req.body), "Profile updated."))
+);
 
 profileRouter.patch(
   "/me/professional",

@@ -11,6 +11,7 @@ import { ok, created } from "../../core/http.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
+import { buildExitDocument, EXIT_DOC_TYPES, type ExitDocType } from "./exit.documents.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 
 /** Default off-boarding clearance checklist generated when a resignation is accepted. */
@@ -273,4 +274,22 @@ exitRouter.patch("/:id/fnf", canApprove, validate({ body: FnfDecideSchema }), as
   if (r.employee.userId) await notify({ userId: r.employee.userId, type: "SUCCESS", title: "Full & final settled", body: `Net payable ₹${r.fnf.netPayable}. Wishing you the best!`, link: "/exit" });
   audit({ action: "exit.fnf_settle", entity: "Resignation", entityId: id, req });
   ok(res, await prisma.resignation.findUnique({ where: { id }, include: RESIGNATION_INCLUDE }), "Settlement completed — employee off-boarded.");
+}));
+
+// ---- branded exit documents (relieving / experience / service / no-dues / F&F / acknowledgement) ----
+exitRouter.get("/:id/documents/:type", asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params["id"] as string;
+  const type = req.params["type"] as ExitDocType;
+  if (!EXIT_DOC_TYPES.includes(type)) throw new BadRequestError(`Unknown document type. One of: ${EXIT_DOC_TYPES.join(", ")}`);
+  const r = await prisma.resignation.findUnique({ where: { id }, select: { employeeId: true, status: true } });
+  if (!r) throw new NotFoundError("Resignation");
+  const own = r.employeeId === req.user!.employeeId;
+  if (!isReviewer(req) && !own) throw new ForbiddenError("Not your resignation");
+  if (!["IN_NOTICE", "EXITED"].includes(r.status)) throw new BadRequestError("Exit documents are available once the resignation is accepted");
+
+  const { buffer, filename } = await buildExitDocument(id, type);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+  audit({ action: "exit.document_generate", entity: "Resignation", entityId: id, after: { type }, req });
+  res.send(buffer);
 }));

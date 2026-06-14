@@ -12,6 +12,8 @@ export const CreateRoleSchema = z.object({
 
 export const UpdateRoleSchema = CreateRoleSchema.partial().omit({ name: true });
 
+export const CloneRoleSchema = CreateRoleSchema;
+
 export const SetRolePermissionsSchema = z.object({
   permissionCodes: z.array(z.string().regex(/^[a-z_]+:[a-z_]+$/)).max(200),
 });
@@ -20,6 +22,7 @@ export const SetUserRolesSchema = z.object({
   roleIds: z.array(z.string().min(1)).min(1).max(10),
 });
 
+export type CloneRoleInput = z.infer<typeof CloneRoleSchema>;
 export type CreateRoleInput = z.infer<typeof CreateRoleSchema>;
 export type UpdateRoleInput = z.infer<typeof UpdateRoleSchema>;
 export type SetRolePermissionsInput = z.infer<typeof SetRolePermissionsSchema>;

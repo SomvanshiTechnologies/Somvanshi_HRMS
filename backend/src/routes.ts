@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { rbacRouter } from "./modules/rbac/rbac.routes.js";
+import { passwordResetRouter } from "./modules/password-reset/passwordReset.routes.js";
 import { orgRouter } from "./modules/org/org.routes.js";
 import { explorerRouter } from "./modules/org/explorer.routes.js";
 import { employeesRouter } from "./modules/employees/employees.routes.js";
@@ -23,6 +24,7 @@ import { engagementRouter } from "./modules/engagement/engagement.routes.js";
 import { performanceRouter } from "./modules/performance/performance.routes.js";
 import { announcementsRouter } from "./modules/announcements/announcements.routes.js";
 import { settingsRouter } from "./modules/settings/settings.routes.js";
+import { brandingRouter } from "./modules/branding/branding.routes.js";
 import { eodRouter } from "./modules/eod/eod.routes.js";
 import { aiRouter } from "./modules/ai/ai.routes.js";
 import { apiLimiter } from "./middleware/rateLimit.middleware.js";
@@ -48,6 +50,7 @@ apiRouter.get("/", (_req, res) => {
 
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/rbac", rbacRouter);
+apiRouter.use("/password-resets", passwordResetRouter);
 apiRouter.use("/org", orgRouter);
 apiRouter.use("/org/explorer", explorerRouter);
 apiRouter.use("/employees", employeesRouter);
@@ -70,5 +73,6 @@ apiRouter.use("/engagement", engagementRouter);
 apiRouter.use("/performance", performanceRouter);
 apiRouter.use("/announcements", announcementsRouter);
 apiRouter.use("/settings", settingsRouter);
+apiRouter.use("/branding", brandingRouter);
 apiRouter.use("/eod", eodRouter);
 apiRouter.use("/ai", aiRouter);

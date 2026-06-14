@@ -61,6 +61,18 @@ function invalidateProfile(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["me"] });
 }
 
+export function useUpdatePersonal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) => api.patch("/profile/me/personal", input),
+    onSuccess: () => {
+      toast.success("Profile updated.");
+      invalidateProfile(queryClient);
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
 export function useUpdateProfessional() {
   const queryClient = useQueryClient();
   return useMutation({

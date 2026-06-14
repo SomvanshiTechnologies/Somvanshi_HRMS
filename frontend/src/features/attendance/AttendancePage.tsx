@@ -151,16 +151,19 @@ function PunchCard() {
 }
 
 /* ---------- month calendar ---------- */
-const STATUS_DOT: Record<string, string> = {
-  PRESENT: "bg-success",
-  WORK_FROM_HOME: "bg-(--chart-3)",
-  HALF_DAY: "bg-warning",
-  ON_LEAVE: "bg-(--chart-6)",
-  ABSENT: "bg-danger",
-  HOLIDAY: "bg-info",
-  WEEK_OFF: "bg-border-strong",
-  FUTURE: "bg-transparent",
+interface StatusStyle { label: string; dot: string; cell: string; text: string }
+const STATUS_STYLE: Record<string, StatusStyle> = {
+  PRESENT:        { label: "Present",  dot: "bg-success",       cell: "bg-success/10 border-success/30",          text: "text-success" },
+  WORK_FROM_HOME: { label: "WFH",      dot: "bg-(--chart-3)",   cell: "bg-(--chart-3)/10 border-(--chart-3)/30",  text: "text-(--chart-3)" },
+  HALF_DAY:       { label: "Half day", dot: "bg-warning",       cell: "bg-warning/10 border-warning/30",          text: "text-warning" },
+  ON_LEAVE:       { label: "Leave",    dot: "bg-(--chart-6)",   cell: "bg-(--chart-6)/10 border-(--chart-6)/30",  text: "text-(--chart-6)" },
+  ABSENT:         { label: "Absent",   dot: "bg-danger",        cell: "bg-danger/10 border-danger/30",            text: "text-danger" },
+  HOLIDAY:        { label: "Holiday",  dot: "bg-info",          cell: "bg-info/10 border-info/30",                text: "text-info" },
+  WEEK_OFF:       { label: "Week off", dot: "bg-border-strong", cell: "bg-surface-sunken border-border",          text: "text-text-faint" },
+  FUTURE:         { label: "",         dot: "bg-transparent",   cell: "border-border/50 border-dashed",           text: "text-text-faint" },
 };
+const LEGEND = ["PRESENT", "WORK_FROM_HOME", "HALF_DAY", "ON_LEAVE", "ABSENT", "HOLIDAY", "WEEK_OFF"] as const;
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function MonthCalendar({
   month, year, days, onPrev, onNext, onDayClick,
@@ -171,45 +174,65 @@ function MonthCalendar({
 }) {
   const firstDow = new Date(year, month - 1, 1).getDay();
   const label = new Date(year, month - 1, 1).toLocaleString("en", { month: "long", year: "numeric" });
+  const todayKey = new Date().toLocaleDateString("en-CA");
+  const actionable = (s: string) => s !== "FUTURE" && s !== "WEEK_OFF" && s !== "HOLIDAY";
+
   return (
-    <Card className="rounded-xl">
-      <CardHeader className="flex-row items-center justify-between">
+    <Card className="rounded-xl overflow-hidden">
+      <CardHeader className="flex-row items-center justify-between border-b border-border bg-surface-sunken/60">
         <CardTitle className="text-sm">{label}</CardTitle>
         <div className="flex gap-1.5">
           <Button variant="secondary" size="icon-sm" onClick={onPrev} aria-label="Previous month"><ChevronLeft /></Button>
           <Button variant="secondary" size="icon-sm" onClick={onNext} aria-label="Next month"><ChevronRight /></Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-medium text-text-faint mb-1.5">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <span key={d}>{d}</span>)}
+      <CardContent className="p-3 sm:p-4">
+        <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-text-faint mb-2">
+          {WEEKDAYS.map((d, i) => <span key={d} className={cn(i === 0 && "text-danger/60")}>{d}</span>)}
         </div>
         <div className="grid grid-cols-7 gap-1.5">
           {Array.from({ length: firstDow }).map((_, i) => <span key={`pad-${i}`} />)}
           {days.map((day) => {
             const num = Number(day.date.slice(-2));
-            const isToday = day.date === new Date().toLocaleDateString("en-CA");
+            const isToday = day.date === todayKey;
+            const st = STATUS_STYLE[day.status] ?? STATUS_STYLE.FUTURE!;
+            const clickable = Boolean(onDayClick) && actionable(day.status);
             return (
               <button
                 key={day.date}
-                onClick={onDayClick ? () => onDayClick(day) : undefined}
-                title={`${day.status}${day.isLate ? " · late" : ""}${day.workMinutes ? ` · ${fmtHours(day.workMinutes)}` : ""}`}
+                onClick={clickable ? () => onDayClick!(day) : undefined}
+                title={`${day.status.replace(/_/g, " ")}${day.isLate ? " · late" : ""}${day.workMinutes ? ` · ${fmtHours(day.workMinutes)}` : ""}`}
                 className={cn(
-                  "flex flex-col items-center gap-1 rounded-lg border border-transparent py-2 text-sm transition-colors",
-                  onDayClick && "cursor-pointer hover:bg-surface-sunken",
-                  isToday && "border-primary/40 bg-primary/5 font-semibold"
+                  "relative flex min-h-[64px] flex-col rounded-lg border p-1.5 text-left transition-all",
+                  st.cell,
+                  clickable ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-card" : "cursor-default",
+                  isToday && "ring-2 ring-primary ring-offset-1 ring-offset-surface",
                 )}
               >
-                <span className={cn("tabular-nums", day.status === "FUTURE" ? "text-text-faint" : "text-text")}>{num}</span>
-                <span className={cn("size-1.5 rounded-full", STATUS_DOT[day.status] ?? "bg-border")} aria-hidden />
+                <span className="flex items-center justify-between">
+                  <span className={cn("text-sm font-semibold tabular-nums leading-none", day.status === "FUTURE" ? "text-text-faint" : "text-text")}>{num}</span>
+                  {isToday && <span className="rounded bg-primary px-1 text-[8px] font-bold uppercase leading-4 text-white">Today</span>}
+                </span>
+                {day.status !== "FUTURE" && (
+                  <span className="mt-auto space-y-0.5">
+                    <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium leading-tight", st.text)}>
+                      <span className={cn("size-1.5 rounded-full", st.dot)} aria-hidden /> {st.label}
+                    </span>
+                    {day.workMinutes > 0 && (
+                      <span className="block text-[10px] tabular-nums text-text-muted">
+                        {fmtHours(day.workMinutes)}{day.isLate ? <span className="text-danger"> · late</span> : ""}
+                      </span>
+                    )}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
-        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-text-muted">
-          {[["Present", "PRESENT"], ["Half day", "HALF_DAY"], ["Leave", "ON_LEAVE"], ["Absent", "ABSENT"], ["Holiday", "HOLIDAY"], ["Week off", "WEEK_OFF"]].map(([label_, key]) => (
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border pt-3 text-[11px] text-text-muted">
+          {LEGEND.map((key) => (
             <span key={key} className="inline-flex items-center gap-1.5">
-              <span className={cn("size-2 rounded-full", STATUS_DOT[key!])} /> {label_}
+              <span className={cn("size-2 rounded-full", STATUS_STYLE[key]!.dot)} /> {STATUS_STYLE[key]!.label}
             </span>
           ))}
         </div>

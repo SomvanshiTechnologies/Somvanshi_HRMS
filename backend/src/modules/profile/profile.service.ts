@@ -117,6 +117,18 @@ export const profileService = {
     return updated;
   },
 
+  /** Personal info — applies immediately, audited (no HR approval). */
+  async updatePersonal(req: Request, input: Record<string, unknown>) {
+    const employee = await requireOwnEmployee(req);
+    const data: Prisma.EmployeeUpdateInput = {};
+    for (const [field, value] of Object.entries(input)) {
+      (data as Record<string, unknown>)[field] = value ?? null;
+    }
+    const updated = await prisma.employee.update({ where: { id: employee.id }, data });
+    audit({ action: "profile.personal_update", entity: "Employee", entityId: employee.id, before: employee, after: updated, req });
+    return updated;
+  },
+
   /** Profile photo — applies immediately. */
   async updatePhoto(req: Request, photoUrl: string) {
     const employee = await requireOwnEmployee(req);

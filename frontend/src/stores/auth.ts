@@ -18,6 +18,7 @@ export interface Me {
   email: string;
   status: string;
   twoFactorEnabled: boolean;
+  mustChangePassword: boolean;
   lastLoginAt: string | null;
   roles: { name: string; displayName: string }[];
   employee: MeEmployee | null;

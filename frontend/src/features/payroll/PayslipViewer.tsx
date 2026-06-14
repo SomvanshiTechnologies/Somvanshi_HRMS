@@ -52,10 +52,14 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
   const email = useEmailPayslip();
   const [showBreakdown, setShowBreakdown] = React.useState(false);
   const d = detail.data;
+  // only show line items / sections that actually carry a value
+  const earnings = (d?.earnings ?? []).filter((e) => e.amount !== 0);
+  const deductions = (d?.deductions ?? []).filter((e) => e.amount !== 0);
+  const hasDeductions = deductions.length > 0;
 
   return (
     <Dialog open={Boolean(id)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
+      <DialogContent hideClose className="max-w-3xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
         {detail.isLoading || !d ? (
           <div className="p-6"><Skeleton className="h-[70vh] rounded-xl" /></div>
         ) : (
@@ -66,7 +70,7 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
                 <div className="rounded-lg bg-white p-1.5 shadow-sm shrink-0"><img src={logoUrl} alt="Somvanshi" className="h-6 w-auto" /></div>
                 <div className="min-w-0">
                   <p className="font-semibold text-text truncate">{d.company.name}</p>
-                  <p className="text-xs text-text-muted">Payslip · {d.period.label}</p>
+                  <p className="text-xs text-text-muted">{d.payslipNo ? <span className="font-mono">{d.payslipNo}</span> : "Payslip"} · {d.period.label}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -103,28 +107,30 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
               </Card>
 
               {/* salary highlights */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-3", hasDeductions ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
                 <Kpi label="Gross Salary" value={inr(d.totals.gross)} icon={TrendingUp} accent="text-text" />
-                <Kpi label="Deductions" value={inr(d.totals.deductions)} icon={TrendingDown} accent="text-warning" />
+                {hasDeductions && <Kpi label="Deductions" value={inr(d.totals.deductions)} icon={TrendingDown} accent="text-warning" />}
                 <Kpi label="Net Salary" value={inr(d.totals.net)} icon={Wallet} accent="text-success" />
                 <Kpi label="Paid Days" value={d.attendance.paidDays} icon={CalendarCheck2} accent="text-primary dark:text-chart-3" />
                 <Kpi label="LOP Days" value={d.attendance.lopDays} sub={d.attendance.attendancePct != null ? `${d.attendance.attendancePct}% attendance` : undefined} icon={CalendarCheck2} accent={d.attendance.lopDays > 0 ? "text-danger" : "text-text"} />
               </div>
 
               {/* earnings + deductions */}
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className={cn("grid gap-4", hasDeductions && "lg:grid-cols-2")}>
                 <div>
                   <p className="text-sm font-semibold text-text mb-2 flex items-center gap-2"><TrendingUp className="size-4 text-success" /> Earnings</p>
-                  <div className="space-y-2">{d.earnings.map((e) => <LineCard key={e.label} label={e.label} amount={e.amount} tone="earn" />)}
+                  <div className="space-y-2">{earnings.map((e) => <LineCard key={e.label} label={e.label} amount={e.amount} tone="earn" />)}
                     <div className="rounded-lg bg-surface-sunken p-3 flex items-center justify-between font-semibold"><span className="text-sm text-text">Gross Earnings</span><span className="text-sm tabular-nums text-text">{inr(d.totals.gross)}</span></div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-text mb-2 flex items-center gap-2"><TrendingDown className="size-4 text-warning" /> Deductions</p>
-                  <div className="space-y-2">{d.deductions.map((e) => <LineCard key={e.label} label={e.label} amount={e.amount} tone="deduct" />)}
-                    <div className="rounded-lg bg-surface-sunken p-3 flex items-center justify-between font-semibold"><span className="text-sm text-text">Total Deductions</span><span className="text-sm tabular-nums text-warning">−{inr(d.totals.deductions)}</span></div>
+                {hasDeductions && (
+                  <div>
+                    <p className="text-sm font-semibold text-text mb-2 flex items-center gap-2"><TrendingDown className="size-4 text-warning" /> Deductions</p>
+                    <div className="space-y-2">{deductions.map((e) => <LineCard key={e.label} label={e.label} amount={e.amount} tone="deduct" />)}
+                      <div className="rounded-lg bg-surface-sunken p-3 flex items-center justify-between font-semibold"><span className="text-sm text-text">Total Deductions</span><span className="text-sm tabular-nums text-warning">−{inr(d.totals.deductions)}</span></div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* net pay hero */}

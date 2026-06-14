@@ -5,8 +5,9 @@ import { audit } from "../audit/audit.service.js";
 import { notify } from "../notifications/notifications.service.js";
 import { mailService } from "../notifications/mail.service.js";
 import { attendanceService } from "../attendance/attendance.service.js";
-import { breakupFromCtc, esiEmployee, monthlyTds, pfEmployee, professionalTax, round2 } from "./payroll.calc.js";
+import { breakupFromCtc, esiEmployee, monthlyTds, PAYROLL_STATUTORY_DEDUCTIONS, pfEmployee, professionalTax, round2 } from "./payroll.calc.js";
 import { renderPayslipPdf } from "./payslip.pdf.js";
+import { brandingService } from "../branding/branding.service.js";
 import { formatDate } from "../../shared/format.js";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -145,8 +146,23 @@ export const payrollService = {
       ? await prisma.payrollRun.update({ where: { id: existing.id }, data: { status: "PROCESSING", processedBy: req.user!.id } })
       : await prisma.payrollRun.create({ data: { month, year, status: "PROCESSING", processedBy: req.user!.id } });
 
+    // Auto-generated payslip numbers: ST/<year>/P<running seq>, reused per employee
+    // on reprocess so a regenerated payslip keeps its original number.
+    const prefix = `ST/${year}/P`;
+    const fmtNo = (seq: number) => `${prefix}${String(seq).padStart(3, "0")}`;
+    const prior = await prisma.payslip.findMany({ where: { runId: run.id }, select: { employeeId: true, payslipNo: true } });
+    const reuse = new Map(prior.filter((p) => p.payslipNo).map((p) => [p.employeeId, p.payslipNo!]));
+
     // reprocess = wipe previous draft output
     await prisma.payslip.deleteMany({ where: { runId: run.id } });
+
+    // running sequence = max existing number for the year (incl. reused ones, so we never collide)
+    const yearSlips = await prisma.payslip.findMany({ where: { year, payslipNo: { startsWith: prefix } }, select: { payslipNo: true } });
+    let maxSeq = 0;
+    for (const no of [...yearSlips.map((s) => s.payslipNo!), ...reuse.values()]) {
+      const n = parseInt(no.slice(prefix.length), 10);
+      if (Number.isFinite(n) && n > maxSeq) maxSeq = n;
+    }
 
     const employees = await prisma.employee.findMany({
       where: { deletedAt: null, status: { in: ["PROBATION", "ACTIVE"] } },
@@ -169,8 +185,15 @@ export const payrollService = {
         continue;
       }
 
-      // LOP days = absences + unpaid (LOP-type) approved leave, from real records
-      const { summary } = await attendanceService.monthFor(employee.id, month, year);
+      // LOP days = ONLY explicitly recorded absences + unpaid (LOP-type) approved
+      // leave. Unmarked days are NOT inferred as absent — salaried staff are paid
+      // in full unless an absence/LOP is actually on record.
+      const explicitAbsent = await prisma.attendanceRecord.count({
+        where: {
+          employeeId: employee.id, status: "ABSENT",
+          date: { gte: new Date(year, month - 1, 1), lte: new Date(year, month, 0) },
+        },
+      });
       const lopLeave = await prisma.leaveRequest.findMany({
         where: {
           employeeId: employee.id, status: "APPROVED", leaveType: { code: "LOP" },
@@ -178,7 +201,7 @@ export const payrollService = {
         },
         select: { days: true },
       });
-      const lopDays = Math.min(daysInMonth, summary.absent + lopLeave.reduce((s, l) => s + l.days, 0));
+      const lopDays = Math.min(daysInMonth, explicitAbsent + lopLeave.reduce((s, l) => s + l.days, 0));
       const paidDays = round2(daysInMonth - lopDays);
       const prorate = paidDays / daysInMonth;
 
@@ -188,16 +211,17 @@ export const payrollService = {
       const sa = round2(comp(ids.SA) * prorate);
       const gross = round2(basic + hra + sa);
 
-      const pf = pfEmployee(basic);
-      const pt = professionalTax(gross);
-      const esi = esiEmployee(gross);
-      const tds = monthlyTds(Number(salary.annualCtc));
+      const pf = PAYROLL_STATUTORY_DEDUCTIONS ? pfEmployee(basic) : 0;
+      const pt = PAYROLL_STATUTORY_DEDUCTIONS ? professionalTax(gross) : 0;
+      const esi = PAYROLL_STATUTORY_DEDUCTIONS ? esiEmployee(gross) : 0;
+      const tds = PAYROLL_STATUTORY_DEDUCTIONS ? monthlyTds(Number(salary.annualCtc)) : 0;
       const deductions = round2(pf + pt + esi + tds);
       const net = round2(gross - deductions);
 
+      const payslipNo = reuse.get(employee.id) ?? fmtNo(++maxSeq);
       await prisma.payslip.create({
         data: {
-          runId: run.id, employeeId: employee.id, month, year,
+          runId: run.id, employeeId: employee.id, month, year, payslipNo,
           workingDays: daysInMonth, paidDays, lopDays,
           grossEarnings: gross, totalDeductions: deductions, netPay: net,
           lines: {
@@ -336,6 +360,8 @@ export const payrollService = {
     const bank = slip.employee.bankDetails[0];
     return {
       id: slip.id,
+      payslipNo: slip.payslipNo,
+      generatedOn: slip.publishedAt ?? slip.createdAt,
       period: { month: slip.month, year: slip.year, label: `${MONTHS[slip.month - 1]} ${slip.year}` },
       status: slip.status,
       payment: { status: slip.run.status, paidAt: slip.run.paidAt, processedAt: slip.run.approvedAt, utr: null as string | null },
@@ -379,12 +405,13 @@ export const payrollService = {
       where: { id: payslipId },
       include: {
         lines: { orderBy: { displayOrder: "asc" } },
+        run: { select: { paidAt: true, approvedAt: true } },
         employee: {
           include: {
             department: { select: { name: true } },
             designation: { select: { title: true } },
             bankDetails: { where: { isPrimary: true }, take: 1 },
-            company: { select: { name: true, address: true } },
+            company: { select: { name: true, address: true, email: true, phone: true, website: true } },
           },
         },
       },
@@ -398,17 +425,46 @@ export const payrollService = {
       if (own && slip.status !== "PUBLISHED") throw new NotFoundError("Payslip");
     }
 
+    // branding (logo / signatory / footer / watermark) — admin-managed, DB-driven
+    const branding = await brandingService.get();
+    const signatory = branding.signatory;
+
+    const bank = slip.employee.bankDetails[0];
+    const issueDate = slip.publishedAt ?? slip.run.approvedAt ?? new Date();
+    const payslipNo = slip.payslipNo ?? `ST/${slip.year}/P${String((parseInt(slip.id.slice(-5), 36) % 900) + 100)}`;
+
     return renderPayslipPdf({
-      company: { name: slip.employee.company.name, address: slip.employee.company.address },
+      company: {
+        name: slip.employee.company.name,
+        address: slip.employee.company.address,
+        email: branding.footer.email || slip.employee.company.email,
+        phone: branding.footer.phone || slip.employee.company.phone,
+        website: branding.footer.website || slip.employee.company.website,
+        tagline: branding.tagline,
+      },
+      branding: {
+        logoUrl: branding.logoUrl,
+        signatureUrl: branding.signatures.hr,
+        stampUrl: branding.stampUrl,
+        watermark: branding.watermark,
+      },
       employee: {
         name: `${slip.employee.firstName} ${slip.employee.lastName}`,
         code: slip.employee.employeeCode,
         designation: slip.employee.designation?.title ?? "—",
         department: slip.employee.department?.name ?? "—",
         email: slip.employee.email,
-        bankLast4: slip.employee.bankDetails[0]?.accountNumber.slice(-4) ?? null,
+        bankLast4: bank?.accountNumber.slice(-4) ?? null,
+        bankName: bank?.bankName ?? null,
         dateOfJoining: slip.employee.dateOfJoining ? formatDate(slip.employee.dateOfJoining) : null,
       },
+      meta: { payslipNo, issueDate: formatDate(issueDate), currency: "INR" },
+      payment: {
+        mode: "Bank Transfer",
+        refNo: null,
+        paidOn: slip.run.paidAt ? formatDate(slip.run.paidAt) : null,
+      },
+      signatory,
       period: `${MONTHS[slip.month - 1]} ${slip.year}`,
       paidDays: Number(slip.paidDays),
       lopDays: Number(slip.lopDays),

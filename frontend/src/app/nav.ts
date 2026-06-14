@@ -12,6 +12,7 @@ import {
   DoorOpen,
   FileText,
   Gauge,
+  KeyRound,
   LayoutDashboard,
   LifeBuoy,
   Megaphone,
@@ -113,6 +114,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Administration",
     items: [
       { label: "Roles & Permissions", to: "/roles", icon: ShieldCheck, permissions: ["roles:read", "roles:manage"] },
+      { label: "Password Resets", to: "/password-resets", icon: KeyRound, permissions: ["users:manage"] },
       { label: "Audit Log", to: "/audit", icon: ClipboardList, permissions: ["audit:read_all"] },
       { label: "Settings", to: "/settings", icon: Settings, permissions: ["settings:manage"] },
     ],

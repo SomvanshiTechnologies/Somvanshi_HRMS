@@ -42,6 +42,7 @@ async function buildMe(userId: string) {
       email: true,
       status: true,
       twoFactorEnabled: true,
+      mustChangePassword: true,
       lastLoginAt: true,
       roles: { select: { role: { select: { name: true, displayName: true } } } },
       employee: {
@@ -66,6 +67,7 @@ async function buildMe(userId: string) {
     email: user.email,
     status: user.status,
     twoFactorEnabled: user.twoFactorEnabled,
+    mustChangePassword: user.mustChangePassword,
     lastLoginAt: user.lastLoginAt,
     roles: user.roles.map((r) => ({ name: r.role.name, displayName: r.role.displayName })),
     employee: user.employee,
@@ -359,7 +361,7 @@ export const authService = {
     if (!matches) throw new UnauthorizedError("Current password is incorrect", "INVALID_CREDENTIALS");
     await prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+      data: { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false },
     });
     audit({ userId, action: "auth.password_change", entity: "User", entityId: userId, req });
   },

@@ -1,0 +1,126 @@
+import PDFDocument from "pdfkit";
+import fs from "node:fs";
+import path from "node:path";
+import { env } from "../../config/env.js";
+
+const NAVY = "#0a3d62";
+const LIGHT = "#63b0cd";
+const SLATE = "#64748b";
+const BORDER = "#e2e8f0";
+const BUNDLED_LOGO = path.resolve(process.cwd(), "assets/logo_STech.jpg");
+
+/** Resolve an uploaded asset URL (e.g. "/api/v1/files/x.png") to an on-disk path. */
+export function assetPath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const name = url.split("/").pop();
+  if (!name) return null;
+  const p = path.resolve(process.cwd(), env.UPLOAD_DIR, name);
+  try { return fs.existsSync(p) ? p : null; } catch { return null; }
+}
+
+export interface DocumentPdfInput {
+  company: { name: string; address: string | null; email: string | null; phone: string | null; website: string | null; tagline: string };
+  logoUrl?: string | null;
+  signatureUrl?: string | null;
+  watermark?: string | null;
+  refNo: string;
+  date: string;
+  title: string;          // e.g. "RELIEVING LETTER"
+  recipient?: { lines: string[] };   // addressed block (name, id, designation…)
+  body: string[];         // paragraphs
+  closing?: string;       // e.g. "We wish you the very best…"
+  signatory: { name: string; title: string };
+}
+
+/** Renders a branded company letter / certificate. Resolves to the PDF buffer. */
+export function renderDocumentPdf(d: DocumentPdfInput): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    // bottom margin 0 so the absolutely-positioned footer never triggers an
+    // auto page-break (which would add blank trailing pages)
+    const doc = new PDFDocument({ size: "A4", margins: { top: 56, bottom: 0, left: 56, right: 56 } });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const LX = 56;
+    const RX = doc.page.width - 56;
+    const W = RX - LX;
+
+    // ---------- letterhead ----------
+    const logoFile = assetPath(d.logoUrl) ?? (fs.existsSync(BUNDLED_LOGO) ? BUNDLED_LOGO : null);
+    let tx = LX;
+    if (logoFile) {
+      try { doc.image(logoFile, LX, 40, { fit: [46, 46] }); tx = LX + 58; } catch { /* ignore */ }
+    }
+    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(16).text(d.company.name.toUpperCase(), tx, 42);
+    doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(LIGHT).text(d.company.tagline, tx, 62);
+    doc.font("Helvetica").fontSize(7.5).fillColor(SLATE);
+    let hy = 74;
+    if (d.company.address) { doc.text(d.company.address, tx, hy, { width: RX - tx }); hy += 10; }
+    const contact = [d.company.email, d.company.phone, d.company.website].filter(Boolean).join("   ·   ");
+    if (contact) doc.text(contact, tx, hy, { width: RX - tx });
+    doc.moveTo(LX, 96).lineTo(RX, 96).strokeColor(NAVY).lineWidth(1.2).stroke();
+    doc.moveTo(LX, 98.5).lineTo(RX, 98.5).strokeColor(LIGHT).lineWidth(0.6).stroke();
+
+    // ---------- ref + date ----------
+    let y = 112;
+    doc.font("Helvetica").fontSize(8.5).fillColor(SLATE)
+      .text(`Ref: ${d.refNo}`, LX, y)
+      .text(`Date: ${d.date}`, LX, y, { width: W, align: "right" });
+    y += 22;
+
+    // ---------- title ----------
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(NAVY).text(d.title.toUpperCase(), LX, y, { width: W, align: "center" });
+    doc.moveTo(doc.page.width / 2 - 60, y + 18).lineTo(doc.page.width / 2 + 60, y + 18).strokeColor(LIGHT).lineWidth(1).stroke();
+    y += 34;
+
+    // ---------- recipient block ----------
+    if (d.recipient?.lines.length) {
+      doc.font("Helvetica").fontSize(9.5).fillColor("#1e293b");
+      d.recipient.lines.forEach((ln, i) => doc.text(ln, LX, y + i * 13, { width: W }));
+      y += d.recipient.lines.length * 13 + 14;
+    }
+
+    // ---------- body ----------
+    doc.font("Helvetica").fontSize(10).fillColor("#1e293b");
+    doc.y = y;
+    doc.x = LX;
+    for (const para of d.body) {
+      doc.text(para, LX, doc.y, { width: W, align: "left", lineGap: 2 });
+      doc.moveDown(0.8);
+    }
+    if (d.closing) { doc.moveDown(0.4); doc.text(d.closing, LX, doc.y, { width: W }); doc.moveDown(0.8); }
+
+    // ---------- signatory ----------
+    let sy = Math.max(doc.y + 24, doc.page.height - 170);
+    doc.font("Helvetica").fontSize(9.5).fillColor("#1e293b").text(`For ${d.company.name},`, LX, sy);
+    const sigFile = assetPath(d.signatureUrl);
+    if (sigFile) { try { doc.image(sigFile, LX, sy + 14, { fit: [130, 34] }); } catch { /* ignore */ } }
+    sy += 52;
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#1e293b").text(d.signatory.name, LX, sy);
+    doc.font("Helvetica").fontSize(9).fillColor(SLATE).text(d.signatory.title, LX, sy + 13);
+    doc.fontSize(8).text("Authorised Signatory", LX, sy + 25);
+
+    // ---------- footer ----------
+    const footY = doc.page.height - 56;
+    doc.moveTo(LX, footY).lineTo(RX, footY).strokeColor(BORDER).lineWidth(0.5).stroke();
+    const footLine = [d.company.website, d.company.email, d.company.phone].filter(Boolean).join("   ·   ");
+    doc.font("Helvetica-Bold").fontSize(7.5).fillColor(NAVY).text(d.company.name, LX, footY + 7, { width: W });
+    doc.font("Helvetica").fontSize(7).fillColor(SLATE)
+      .text(footLine, LX, footY + 17, { width: W })
+      .text(`System-generated by SomHR · Ref ${d.refNo}`, LX, footY + 27, { width: W })
+      .text("Page 1 of 1", LX, footY + 27, { width: W, align: "right" });
+
+    // ---------- watermark ----------
+    if (d.watermark) {
+      doc.save();
+      doc.rotate(-32, { origin: [doc.page.width / 2, doc.page.height / 2] });
+      doc.fillColor(NAVY).opacity(0.06).font("Helvetica-Bold").fontSize(54)
+        .text(d.watermark, 0, doc.page.height / 2 - 36, { width: doc.page.width, align: "center" });
+      doc.opacity(1).restore();
+    }
+
+    doc.end();
+  });
+}

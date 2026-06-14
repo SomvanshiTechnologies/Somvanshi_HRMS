@@ -7,6 +7,7 @@ import { LoginPage } from "@/features/auth/LoginPage";
 import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/features/auth/ResetPasswordPage";
 import { SecurityPage } from "@/features/auth/SecurityPage";
+import { PasswordResetsPage } from "@/features/auth/PasswordResetsPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { EmployeeListPage } from "@/features/employees/EmployeeListPage";
 import { EmployeeDetailPage } from "@/features/employees/EmployeeDetailPage";
@@ -113,6 +114,14 @@ export const router = createBrowserRouter([
         ),
       },
       { path: "security", element: <SecurityPage /> },
+      {
+        path: "password-resets",
+        element: (
+          <RequirePermission anyOf={["users:manage"]}>
+            <PasswordResetsPage />
+          </RequirePermission>
+        ),
+      },
 
       { path: "attendance", element: <AttendancePage /> },
       {

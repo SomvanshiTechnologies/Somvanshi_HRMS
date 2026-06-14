@@ -8,10 +8,12 @@ import { requirePermission } from "../../middleware/rbac.middleware.js";
 import { PERMISSIONS } from "../../shared/permissions.js";
 import { ok, created, noContent } from "../../core/http.js";
 import {
+  CloneRoleSchema,
   CreateRoleSchema,
   SetRolePermissionsSchema,
   SetUserRolesSchema,
   UpdateRoleSchema,
+  type CloneRoleInput,
   type CreateRoleInput,
   type SetRolePermissionsInput,
   type SetUserRolesInput,
@@ -34,12 +36,27 @@ rbacRouter.get(
   asyncHandler(async (_req: Request, res: Response) => void ok(res, await rbacService.listPermissions()))
 );
 
+rbacRouter.get(
+  "/users",
+  requirePermission(PERMISSIONS.ROLES_MANAGE, PERMISSIONS.USERS_MANAGE),
+  asyncHandler(async (_req: Request, res: Response) => void ok(res, await rbacService.listUsers()))
+);
+
 rbacRouter.post(
   "/roles",
   requirePermission(PERMISSIONS.ROLES_MANAGE),
   validate({ body: CreateRoleSchema }),
   asyncHandler(async (req: Request, res: Response) =>
     void created(res, await rbacService.createRole(req.body as CreateRoleInput, req))
+  )
+);
+
+rbacRouter.post(
+  "/roles/:id/clone",
+  requirePermission(PERMISSIONS.ROLES_MANAGE),
+  validate({ body: CloneRoleSchema }),
+  asyncHandler(async (req: Request, res: Response) =>
+    void created(res, await rbacService.cloneRole(req.params["id"] as string, req.body as CloneRoleInput, req))
   )
 );
 

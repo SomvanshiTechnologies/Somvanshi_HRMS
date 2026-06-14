@@ -5,6 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { useAuthStore } from "@/stores/auth";
 import { useMe } from "@/features/auth/useAuth";
+import { ForcePasswordChange } from "@/features/auth/ForcePasswordChange";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SomAIWidget } from "@/features/somai/SomAIWidget";
@@ -75,6 +76,11 @@ export function AppLayout() {
 
   if (session === "guest") {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // account flagged after an admin-approved reset — block the app until changed
+  if (user?.mustChangePassword) {
+    return <ForcePasswordChange />;
   }
 
   const toggleSidebar = () => {

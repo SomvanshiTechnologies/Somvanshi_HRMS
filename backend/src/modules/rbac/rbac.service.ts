@@ -3,7 +3,7 @@ import { prisma } from "../../config/db.js";
 import { BadRequestError, ConflictError, NotFoundError } from "../../core/errors.js";
 import { invalidatePermissionCache } from "../../middleware/rbac.middleware.js";
 import { audit } from "../audit/audit.service.js";
-import type { CreateRoleInput, UpdateRoleInput } from "./rbac.schema.js";
+import type { CloneRoleInput, CreateRoleInput, UpdateRoleInput } from "./rbac.schema.js";
 
 export const rbacService = {
   async listRoles() {
@@ -44,6 +44,50 @@ export const rbacService = {
     });
     audit({ action: "role.create", entity: "Role", entityId: role.id, after: role, req });
     return role;
+  },
+
+  /** Duplicate a role together with its full permission set. */
+  async cloneRole(sourceId: string, input: CloneRoleInput, req?: Request) {
+    const source = await prisma.role.findUnique({ where: { id: sourceId }, include: { permissions: true } });
+    if (!source) throw new NotFoundError("Role");
+    const exists = await prisma.role.findUnique({ where: { name: input.name } });
+    if (exists) throw new ConflictError(`Role ${input.name} already exists`);
+    const role = await prisma.role.create({
+      data: {
+        name: input.name,
+        displayName: input.displayName,
+        description: input.description ?? source.description,
+        permissions: { createMany: { data: source.permissions.map((p) => ({ permissionId: p.permissionId })) } },
+      },
+    });
+    audit({ action: "role.clone", entity: "Role", entityId: role.id, after: { from: source.name, name: role.name }, req });
+    return role;
+  },
+
+  /** All login accounts with their employee identity and assigned roles (for the assignment UI). */
+  async listUsers() {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        email: true,
+        status: true,
+        employee: {
+          select: {
+            firstName: true, lastName: true, photoUrl: true, employeeCode: true,
+            designation: { select: { title: true } }, department: { select: { name: true } },
+          },
+        },
+        roles: { select: { role: { select: { id: true, name: true, displayName: true } } } },
+      },
+    });
+    return users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      status: u.status,
+      employee: u.employee,
+      roles: u.roles.map((r) => r.role),
+    }));
   },
 
   async updateRole(id: string, input: UpdateRoleInput, req?: Request) {

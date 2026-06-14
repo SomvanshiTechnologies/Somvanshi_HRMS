@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField } from "@/components/form-field";
+import { BrandingSettings } from "./BrandingSettings";
 
 const NONE = "__none__";
 
@@ -28,11 +29,13 @@ export function SettingsPage() {
   const set = <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => setForm({ ...form, [k]: v });
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5 max-w-3xl">
       <div>
         <h1 className="text-xl font-semibold text-text flex items-center gap-2"><Settings2 className="size-5 text-primary dark:text-chart-3" /> Settings</h1>
-        <p className="text-sm text-text-muted">Organization-wide defaults and preferences.</p>
+        <p className="text-sm text-text-muted">Organization-wide defaults, branding and preferences.</p>
       </div>
+
+      <BrandingSettings canManage={canManage} />
 
       <Card className="rounded-xl p-5 space-y-4">
         <p className="font-semibold text-text flex items-center gap-2"><UserCog className="size-4 text-primary dark:text-chart-3" /> People defaults</p>

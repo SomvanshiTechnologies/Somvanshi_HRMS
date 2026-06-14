@@ -19,30 +19,27 @@ import {
   ShieldAlert,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
 import {
   useAddBank,
-  useCancelChangeRequest,
-  useCreateChangeRequest,
   useDeleteBank,
   useMyDocuments,
   useMyProfile,
   useUpdateBank,
+  useUpdatePersonal,
   useUpdateProfessional,
   useUploadDocument,
   useUploadPhoto,
   type MyProfile,
 } from "./useProfile";
 import { apiErrorMessage } from "@/lib/api";
-import { cn, formatDate, formatDateTime, initials } from "@/lib/utils";
+import { cn, formatDate, initials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert } from "@/components/ui/alert";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -87,7 +84,7 @@ const PersonalSchema = z.object({
 type PersonalValues = z.infer<typeof PersonalSchema>;
 
 function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; open: boolean; onClose: () => void }) {
-  const createRequest = useCreateChangeRequest();
+  const update = useUpdatePersonal();
   const form = useForm<PersonalValues>({
     resolver: zodResolver(PersonalSchema),
     values: {
@@ -122,7 +119,7 @@ function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; op
       onClose();
       return;
     }
-    await createRequest.mutateAsync({ changes });
+    await update.mutateAsync(changes);
     onClose();
   });
 
@@ -132,7 +129,7 @@ function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; op
       <DialogContent wide>
         <DialogHeader>
           <DialogTitle>Edit personal information</DialogTitle>
-          <DialogDescription>Changes are submitted to HR for review before they take effect.</DialogDescription>
+          <DialogDescription>These updates apply immediately.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Personal email" htmlFor="pe" error={err.personalEmail?.message}>
@@ -160,7 +157,7 @@ function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; op
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Date of birth" htmlFor="dob" error={err.dateOfBirth?.message} hint="Requires HR verification">
+          <FormField label="Date of birth" htmlFor="dob" error={err.dateOfBirth?.message}>
             <Input id="dob" type="date" {...form.register("dateOfBirth")} />
           </FormField>
           <FormField label="Current address" htmlFor="ca" className="sm:col-span-2" error={err.currentAddress?.message}>
@@ -171,7 +168,7 @@ function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; op
           </FormField>
           <DialogFooter className="sm:col-span-2">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" loading={createRequest.isPending}>Submit for review</Button>
+            <Button type="submit" loading={update.isPending}>Save</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -404,7 +401,6 @@ export function MyProfilePage() {
   const profile = useMyProfile();
   const documents = useMyDocuments();
   const uploadPhoto = useUploadPhoto();
-  const cancelRequest = useCancelChangeRequest();
   const [editPersonal, setEditPersonal] = React.useState(false);
   const [editProfessional, setEditProfessional] = React.useState(false);
   const [uploadOpen, setUploadOpen] = React.useState(false);
@@ -427,7 +423,6 @@ export function MyProfilePage() {
   }
 
   const p = profile.data;
-  const pending = p.pendingChangeRequest;
 
   return (
     <div className="space-y-4">
@@ -492,24 +487,6 @@ export function MyProfilePage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* pending request banner */}
-      {pending && (
-        <Alert variant="warning" title="Changes awaiting HR review">
-          <span className="block">
-            Submitted {formatDateTime(pending.submittedAt)} — fields: {Object.keys(pending.changes).join(", ")}.
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-1 -ml-2 text-danger hover:text-danger"
-            loading={cancelRequest.isPending}
-            onClick={() => cancelRequest.mutate(pending.id)}
-          >
-            <X /> Cancel request
-          </Button>
-        </Alert>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* completion checklist + alerts — RIGHT column (offset down to align with tab content) */}
@@ -607,11 +584,11 @@ export function MyProfilePage() {
                 </CardContent>
               </Card>
 
-              {/* personal — approval workflow */}
+              {/* personal — self-service, applies immediately */}
               <Card className="rounded-xl">
                 <CardHeader className="flex-row items-center justify-between">
                   <CardTitle className="text-sm">Personal information</CardTitle>
-                  <Button variant="secondary" size="sm" onClick={() => setEditPersonal(true)} disabled={Boolean(pending)}>
+                  <Button variant="secondary" size="sm" onClick={() => setEditPersonal(true)}>
                     <Pencil /> Edit
                   </Button>
                 </CardHeader>

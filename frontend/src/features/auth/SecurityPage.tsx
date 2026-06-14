@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useRequestReset } from "./usePasswordResets";
 
 interface Session {
   id: string;
@@ -37,6 +38,8 @@ export function SecurityPage() {
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
 
+  const requestReset = useRequestReset();
+
   return (
     <div className="max-w-3xl space-y-4">
       <div>
@@ -62,6 +65,27 @@ export function SecurityPage() {
           <p className="mt-2 text-xs text-text-faint">
             2FA setup with QR enrolment is available via your administrator (API: /auth/2fa/setup).
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <KeyRound className="size-4" /> Password
+          </CardTitle>
+          <CardDescription>
+            Forgot your password or need it reset? Send a request to your administrator. Once approved, a temporary
+            password is emailed to you and you'll set a new one at sign-in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="secondary"
+            loading={requestReset.isPending}
+            onClick={() => requestReset.mutate({ reason: "Requested from Security settings" })}
+          >
+            <KeyRound /> Request a password reset
+          </Button>
         </CardContent>
       </Card>
 

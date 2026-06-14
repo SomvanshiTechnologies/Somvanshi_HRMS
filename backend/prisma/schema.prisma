@@ -371,6 +371,7 @@ model User {
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
   twoFactorEnabled    Boolean    @default(false)
+  mustChangePassword  Boolean    @default(false)
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   deletedAt           DateTime?
@@ -382,6 +383,7 @@ model User {
   devices             Device[]
   twoFactorSecret     TwoFactorSecret?
   passwordResetTokens PasswordResetToken[]
+  passwordResetRequests PasswordResetRequest[]
   notifications       Notification[]
   auditLogs           AuditLog[]
   conversations       Conversation[]
@@ -525,6 +527,33 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+/// Admin-mediated reset: employee requests, an admin approves, and the system
+/// generates a temporary password (never typed by an admin) and emails it.
+model PasswordResetRequest {
+  id              String                     @id @default(cuid())
+  userId          String
+  reason          String?
+  status          PasswordResetRequestStatus @default(PENDING)
+  requestedAt     DateTime                   @default(now())
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewerRemarks String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("password_reset_requests")
+}
+
+enum PasswordResetRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model AuditLog {
@@ -1673,6 +1702,7 @@ model PayrollRun {
 
 model Payslip {
   id            String        @id @default(cuid())
+  payslipNo     String?       @unique // auto-generated: ST/YYYY/PXXX (running, per-year)
   runId         String
   employeeId    String
   month         Int
