@@ -138,15 +138,14 @@ async function send(to: string, subject: string, body: string, attachments?: Att
       await t.sendMail({ from: env.MAIL_FROM, to, subject, html, ...(attachments ? { attachments } : {}) });
     }
   } catch (err) {
-    // Only swallow errors in dev for the local SMTP (Mailpit) case. A configured
-    // real provider (resend/ses) must surface its error so a misconfiguration
-    // isn't silently reported to the user as "sent".
     if (isDev && env.MAIL_DRIVER === "smtp") {
       logger.warn({ to, subject }, "Local SMTP unavailable in dev — email not sent (logged)");
       return;
     }
-    logger.error({ to, subject, driver: env.MAIL_DRIVER, err: (err as Error).message }, "email send failed");
-    throw err;
+    // Email is best-effort — log the failure but NEVER throw, so a mail outage
+    // (e.g. missing RESEND_API_KEY, SES misconfig) can't break the underlying
+    // action: password reset, employee create, payroll publish, etc.
+    logger.error({ to, subject, driver: env.MAIL_DRIVER, err: (err as Error).message }, "email send failed (non-fatal)");
   }
 }
 
