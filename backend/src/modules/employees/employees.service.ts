@@ -9,6 +9,7 @@ import { audit } from "../audit/audit.service.js";
 import { mailService } from "../notifications/mail.service.js";
 import { decryptSafe } from "../../core/fieldCrypto.js";
 import { getCompanyId } from "../org/org.service.js";
+import { logger } from "../../core/logger.js";
 import type {
   CreateEmployeeInput,
   EmployeeListQuery,
@@ -216,7 +217,17 @@ export const employeesService = {
     });
 
     if (tempPassword) {
-      await mailService.sendWelcome(input.email, input.firstName, tempPassword);
+      // Non-blocking: a welcome-email failure (e.g. mail provider misconfigured
+      // or Resend sandbox) must NOT fail employee creation. The temp password is
+      // also logged below so HR can retrieve it.
+      void mailService
+        .sendWelcome(input.email, input.firstName, tempPassword)
+        .catch((err: unknown) =>
+          logger.warn(
+            { to: input.email, tempPassword, err: (err as Error).message },
+            "welcome email failed — employee created; temp password logged here"
+          )
+        );
     }
     audit({ action: "employee.create", entity: "Employee", entityId: employee.id, after: employee, req });
     return employee;
