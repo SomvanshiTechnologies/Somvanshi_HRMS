@@ -142,7 +142,10 @@ export function EmployeeFormPage() {
     }
   });
 
-  if (isEdit && existing.isLoading) {
+  // In edit mode, wait for the dropdown option lists too — otherwise the form
+  // renders before they load and the Selects can't show the saved values.
+  const refLoading = departments.isLoading || designations.isLoading || locations.isLoading || managers.isLoading;
+  if (isEdit && (existing.isLoading || refLoading)) {
     return (
       <div className="max-w-3xl space-y-4">
         <Skeleton className="h-8 w-56" />
