@@ -9,7 +9,7 @@ import { requirePermission } from "../../middleware/rbac.middleware.js";
 import { PERMISSIONS } from "../../shared/permissions.js";
 import { ok, created } from "../../core/http.js";
 import { BadRequestError, NotFoundError } from "../../core/errors.js";
-import { upload, fileUrl } from "../files/files.routes.js";
+import { upload, fileUrl, storeUpload } from "../files/files.routes.js";
 import { prisma } from "../../config/db.js";
 import { parseAndStore } from "./resume.ai.js";
 import { generateJobDescription } from "./jd.ai.js";
@@ -101,7 +101,7 @@ recruitmentRouter.post(
   upload.single("file"),
   asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) throw new BadRequestError("No file provided (field 'file')");
-    created(res, await recruitmentService.attachResume(req, req.params["id"] as string, { url: fileUrl(req.file.filename), name: req.file.originalname }), "Resume uploaded.");
+    created(res, await recruitmentService.attachResume(req, req.params["id"] as string, { url: fileUrl(await storeUpload(req.file)), name: req.file.originalname }), "Resume uploaded.");
   })
 );
 

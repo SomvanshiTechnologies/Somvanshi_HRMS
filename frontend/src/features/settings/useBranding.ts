@@ -11,9 +11,30 @@ export interface Branding {
   signatory: { name: string; title: string };
   footer: { website: string; email: string; phone: string };
   watermark: "" | "CONFIDENTIAL" | "OFFICIAL DOCUMENT" | "EMPLOYEE COPY";
+  email: { logoUrl: string | null; headerColor: string; footerText: string; website: string };
 }
 
 export type BrandingAssetType = "logo" | "letterhead" | "stamp" | "signatureHr" | "signatureCeo" | "signatureDirector";
+
+export type EmailPreviewKey = "welcome" | "password-reset" | "payslip" | "announcement";
+
+export function useEmailPreview(key: EmailPreviewKey, enabled: boolean) {
+  return useQuery({
+    queryKey: ["branding", "email-preview", key],
+    enabled,
+    queryFn: async () =>
+      (await api.get<{ data: { key: string; label: string; html: string } }>("/branding/email/preview", { params: { key } })).data.data,
+  });
+}
+
+export function useSendTestEmail() {
+  return useMutation({
+    mutationFn: (input: { key: EmailPreviewKey; to: string }) =>
+      api.post<{ message: string }>("/branding/email/test", input),
+    onSuccess: (res) => toast.success(res.data.message ?? "Test email sent."),
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
 
 export function useBranding() {
   return useQuery({

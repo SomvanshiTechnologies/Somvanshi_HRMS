@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField } from "@/components/form-field";
-import { BrandingSettings } from "./BrandingSettings";
+import { BrandingSettings, EmailTemplatesCard } from "./BrandingSettings";
 
 const NONE = "__none__";
 
@@ -36,6 +36,8 @@ export function SettingsPage() {
       </div>
 
       <BrandingSettings canManage={canManage} />
+
+      <EmailTemplatesCard canManage={canManage} />
 
       <Card className="rounded-xl p-5 space-y-4">
         <p className="font-semibold text-text flex items-center gap-2"><UserCog className="size-4 text-primary dark:text-chart-3" /> People defaults</p>

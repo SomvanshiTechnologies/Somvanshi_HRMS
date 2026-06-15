@@ -27,9 +27,12 @@ const EnvSchema = z.object({
   ACCOUNT_LOCK_MINUTES: z.coerce.number().default(15),
   TWO_FACTOR_ISSUER: z.string().default("SomHR"),
 
-  // Email delivery: "smtp" (nodemailer SMTP) or "ses" (AWS SES via nodemailer's
-  // SES transport — supports attachments + raw MIME like the SMTP path).
-  MAIL_DRIVER: z.enum(["smtp", "ses"]).default("smtp"),
+  // Email delivery driver:
+  //  "smtp"   — nodemailer SMTP (dev Mailpit, or any relay incl. Resend SMTP)
+  //  "ses"    — AWS SES via nodemailer's SES transport
+  //  "resend" — Resend HTTP API (uses RESEND_API_KEY)
+  MAIL_DRIVER: z.enum(["smtp", "ses", "resend"]).default("smtp"),
+  RESEND_API_KEY: z.string().optional().default(""),
   SMTP_HOST: z.string().default("localhost"),
   SMTP_PORT: z.coerce.number().default(1025),
   SMTP_SECURE: z

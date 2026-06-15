@@ -24,7 +24,8 @@ Validated at boot by `src/config/env.ts` — a missing required var stops startu
 | `ACCOUNT_LOCK_MINUTES` | – | `15` | |
 | `TWO_FACTOR_ISSUER` | – | `SomHR` | TOTP issuer label |
 | **Email** | | | |
-| `MAIL_DRIVER` | – | `ses` \| `smtp` | `ses` uses the instance IAM role |
+| `MAIL_DRIVER` | – | `ses` \| `resend` \| `smtp` | `ses` uses the instance IAM role |
+| `RESEND_API_KEY` | when `resend` | `re_…` | Resend API key; `MAIL_FROM` must be a Resend-verified domain |
 | `SES_REGION` | – | `ap-south-1` | falls back to `AWS_REGION`/`S3_REGION` |
 | `MAIL_FROM` | ✅ (prod) | `Somvanshi HRMS <no-reply@yourdomain.com>` | SES-verified identity |
 | `SMTP_HOST/PORT/SECURE/USER/PASS` | when `MAIL_DRIVER=smtp` | — | fallback SMTP relay |

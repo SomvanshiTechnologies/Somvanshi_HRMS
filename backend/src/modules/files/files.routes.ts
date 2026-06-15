@@ -44,14 +44,24 @@ export function fileUrl(filename: string): string {
   return `${env.API_PREFIX}/files/${filename}`;
 }
 
+/**
+ * Persist a buffered multer upload to the active storage driver and return the
+ * generated stored filename. Use after `upload.single(...)` in any route, since
+ * the shared `upload` middleware now buffers in memory (no disk `.filename`).
+ */
+export async function storeUpload(file: Express.Multer.File): Promise<string> {
+  const ext = path.extname(file.originalname).toLowerCase().slice(0, 10);
+  const filename = `${crypto.randomUUID()}${ext}`;
+  await putObject(filename, file.buffer, file.mimetype);
+  return filename;
+}
+
 export const filesRouter: Router = Router();
 
 // generic upload endpoint (field name: "file") → { url, name, size, mimeType }
 filesRouter.post("/", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
   if (!req.file) throw new BadRequestError("No file provided (field name must be 'file')");
-  const ext = path.extname(req.file.originalname).toLowerCase().slice(0, 10);
-  const filename = `${crypto.randomUUID()}${ext}`;
-  await putObject(filename, req.file.buffer, req.file.mimetype);
+  const filename = await storeUpload(req.file);
   res.status(201).json({
     success: true,
     data: {

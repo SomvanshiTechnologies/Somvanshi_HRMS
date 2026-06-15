@@ -15,6 +15,17 @@ export interface Branding {
   signatory: { name: string; title: string };
   footer: { website: string; email: string; phone: string };
   watermark: "" | "CONFIDENTIAL" | "OFFICIAL DOCUMENT" | "EMPLOYEE COPY";
+  /**
+   * Email-specific branding. `logoUrl` MUST be a public URL (CloudFront/S3
+   * static) — email clients can't load the authenticated /files route — so it
+   * is kept separate from the document `logoUrl`.
+   */
+  email: {
+    logoUrl: string | null;
+    headerColor: string;
+    footerText: string;
+    website: string;
+  };
 }
 
 export type AssetType = "logo" | "letterhead" | "stamp" | "signatureHr" | "signatureCeo" | "signatureDirector";
@@ -31,6 +42,12 @@ function emptyBranding(): Branding {
     signatory: { name: "", title: "" },
     footer: { website: "", email: "", phone: "" },
     watermark: "",
+    email: {
+      logoUrl: null,
+      headerColor: "#0A3D62",
+      footerText: "Somvanshi Technologies · This is an automated message from SomHR.",
+      website: "",
+    },
   };
 }
 
@@ -63,6 +80,12 @@ export const brandingService = {
         phone: stored.footer?.phone || company?.phone || "",
       },
       watermark: stored.watermark ?? base.watermark,
+      email: {
+        logoUrl: stored.email?.logoUrl ?? base.email.logoUrl,
+        headerColor: stored.email?.headerColor || base.email.headerColor,
+        footerText: stored.email?.footerText || base.email.footerText,
+        website: stored.email?.website || company?.website || base.email.website,
+      },
     };
   },
 
@@ -80,6 +103,7 @@ export const brandingService = {
       signatures: { ...(current.signatures ?? {}), ...(patch.signatures ?? {}) },
       signatory: { ...(current.signatory ?? {}), ...(patch.signatory ?? {}) },
       footer: { ...(current.footer ?? {}), ...(patch.footer ?? {}) },
+      email: { ...(current.email ?? {}), ...(patch.email ?? {}) },
     };
     await prisma.appSetting.upsert({
       where: { key: KEY },

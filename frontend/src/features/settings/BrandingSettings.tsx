@@ -1,8 +1,8 @@
 import * as React from "react";
-import { ImageUp, Save, Stamp, Palette } from "lucide-react";
+import { ImageUp, Save, Stamp, Palette, Mail, Send, Eye } from "lucide-react";
 import {
-  useBranding, useUpdateBranding, useUploadBrandingAsset,
-  type Branding, type BrandingAssetType,
+  useBranding, useUpdateBranding, useUploadBrandingAsset, useEmailPreview, useSendTestEmail,
+  type Branding, type BrandingAssetType, type EmailPreviewKey,
 } from "./useBranding";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -98,12 +98,88 @@ export function BrandingSettings({ canManage }: { canManage: boolean }) {
         </Select>
       </FormField>
 
+      {/* email branding */}
+      <div className="border-t border-border pt-4">
+        <p className="font-medium text-text flex items-center gap-2 text-sm"><Mail className="size-4 text-primary dark:text-chart-3" /> Email Branding</p>
+        <p className="text-xs text-text-muted mt-0.5 mb-3">Applied to every outgoing email. The logo must be a <strong>public URL</strong> (CloudFront/S3) — email clients can't load authenticated files.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <FormField label="Email logo URL" hint="e.g. https://assets.somvanshitechnologies.com/logo.png">
+            <Input value={form.email.logoUrl ?? ""} disabled={!canManage} onChange={(e) => set({ email: { ...form.email, logoUrl: e.target.value } })} placeholder="https://cdn.…/branding/logo.png" />
+          </FormField>
+          <FormField label="Header color" hint="Hex color of the email header band">
+            <div className="flex items-center gap-2">
+              <input type="color" aria-label="Header color" value={form.email.headerColor || "#0A3D62"} disabled={!canManage} onChange={(e) => set({ email: { ...form.email, headerColor: e.target.value } })} className="h-9 w-12 rounded border border-border bg-transparent p-1" />
+              <Input value={form.email.headerColor} disabled={!canManage} onChange={(e) => set({ email: { ...form.email, headerColor: e.target.value } })} placeholder="#0A3D62" />
+            </div>
+          </FormField>
+          <FormField label="Footer text">
+            <Input value={form.email.footerText} disabled={!canManage} onChange={(e) => set({ email: { ...form.email, footerText: e.target.value } })} placeholder="Somvanshi Technologies · automated message" />
+          </FormField>
+          <FormField label="Company website">
+            <Input value={form.email.website} disabled={!canManage} onChange={(e) => set({ email: { ...form.email, website: e.target.value } })} placeholder="https://somvanshitechnologies.com" />
+          </FormField>
+        </div>
+      </div>
+
       {canManage && (
-        <Button loading={update.isPending} onClick={() => update.mutate({ tagline: form.tagline, signatory: form.signatory, footer: form.footer, watermark: form.watermark })}>
+        <Button loading={update.isPending} onClick={() => update.mutate({ tagline: form.tagline, signatory: form.signatory, footer: form.footer, watermark: form.watermark, email: form.email })}>
           <Save /> Save branding
         </Button>
       )}
       <p className="flex items-center gap-1.5 text-[11px] text-text-faint"><Stamp className="size-3" /> Asset uploads apply immediately; text fields save with the button.</p>
+    </Card>
+  );
+}
+
+const PREVIEW_TABS: { key: EmailPreviewKey; label: string }[] = [
+  { key: "welcome", label: "Welcome" },
+  { key: "password-reset", label: "Password Reset" },
+  { key: "payslip", label: "Payslip" },
+  { key: "announcement", label: "Announcement" },
+];
+
+/** Settings → Email Templates: preview each template and send a live test. */
+export function EmailTemplatesCard({ canManage, defaultTo }: { canManage: boolean; defaultTo?: string }) {
+  const [active, setActive] = React.useState<EmailPreviewKey>("welcome");
+  const [to, setTo] = React.useState(defaultTo ?? "");
+  const preview = useEmailPreview(active, true);
+  const sendTest = useSendTestEmail();
+
+  return (
+    <Card className="rounded-xl p-5 space-y-4">
+      <div>
+        <p className="font-semibold text-text flex items-center gap-2"><Eye className="size-4 text-primary dark:text-chart-3" /> Email Templates</p>
+        <p className="text-xs text-text-muted mt-0.5">Preview the branded templates and send a test before going live on your email provider.</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {PREVIEW_TABS.map((t) => (
+          <Button key={t.key} size="sm" variant={active === t.key ? "primary" : "secondary"} onClick={() => setActive(t.key)}>{t.label}</Button>
+        ))}
+      </div>
+
+      <div className="rounded-lg border border-border overflow-hidden bg-surface-sunken">
+        {preview.isLoading ? (
+          <Skeleton className="h-72 w-full" />
+        ) : (
+          <iframe title="Email preview" sandbox="" className="h-80 w-full bg-white" srcDoc={preview.data?.html ?? ""} />
+        )}
+      </div>
+
+      {canManage && (
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+          <FormField label="Send a test to" className="flex-1">
+            <Input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="you@example.com" />
+          </FormField>
+          <Button
+            loading={sendTest.isPending}
+            disabled={!to}
+            onClick={() => sendTest.mutate({ key: active, to })}
+          >
+            <Send /> Send {PREVIEW_TABS.find((t) => t.key === active)?.label} Test
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

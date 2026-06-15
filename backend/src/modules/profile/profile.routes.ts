@@ -8,7 +8,7 @@ import { requirePermission } from "../../middleware/rbac.middleware.js";
 import { PERMISSIONS } from "../../shared/permissions.js";
 import { ok, created, noContent } from "../../core/http.js";
 import { BadRequestError } from "../../core/errors.js";
-import { upload, fileUrl } from "../files/files.routes.js";
+import { upload, fileUrl, storeUpload } from "../files/files.routes.js";
 import {
   CreateChangeRequestSchema,
   PersonalInfoSchema,
@@ -43,7 +43,7 @@ profileRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) throw new BadRequestError("No image provided (field 'file')");
     if (!req.file.mimetype.startsWith("image/")) throw new BadRequestError("Profile photo must be an image");
-    ok(res, await profileService.updatePhoto(req, fileUrl(req.file.filename)), "Photo updated.");
+    ok(res, await profileService.updatePhoto(req, fileUrl(await storeUpload(req.file))), "Photo updated.");
   })
 );
 
@@ -83,7 +83,7 @@ profileRouter.post(
     created(
       res,
       await profileService.uploadDocument(req, input, {
-        url: fileUrl(req.file.filename),
+        url: fileUrl(await storeUpload(req.file)),
         mimeType: req.file.mimetype,
         sizeBytes: req.file.size,
       }),
