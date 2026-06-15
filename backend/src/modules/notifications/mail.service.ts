@@ -138,13 +138,14 @@ async function send(to: string, subject: string, body: string, attachments?: Att
       await t.sendMail({ from: env.MAIL_FROM, to, subject, html, ...(attachments ? { attachments } : {}) });
     }
   } catch (err) {
-    if (isDev) {
-      logger.warn(
-        { to, subject, driver: env.MAIL_DRIVER },
-        "Mail transport unavailable in dev — email not sent (logged)"
-      );
+    // Only swallow errors in dev for the local SMTP (Mailpit) case. A configured
+    // real provider (resend/ses) must surface its error so a misconfiguration
+    // isn't silently reported to the user as "sent".
+    if (isDev && env.MAIL_DRIVER === "smtp") {
+      logger.warn({ to, subject }, "Local SMTP unavailable in dev — email not sent (logged)");
       return;
     }
+    logger.error({ to, subject, driver: env.MAIL_DRIVER, err: (err as Error).message }, "email send failed");
     throw err;
   }
 }
