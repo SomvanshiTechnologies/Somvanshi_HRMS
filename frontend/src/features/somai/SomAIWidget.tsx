@@ -1,6 +1,6 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Maximize2, SendHorizonal, X } from "lucide-react";
+import { Bot, Maximize2, SendHorizonal, SquarePen, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ChatThread, type ChatThreadHandle } from "./ChatThread";
 import { useAiStatus, useConversations, useCreateConversation } from "./useSomAI";
@@ -19,10 +19,14 @@ export function SomAIWidget() {
   const [input, setInput] = React.useState("");
   const threadRef = React.useRef<ChatThreadHandle>(null);
 
+  // Start a fresh chat every time Sera is opened — don't reopen the previous
+  // conversation. History stays saved and is reachable from the full /sera page.
   React.useEffect(() => {
-    if (!open || activeId) return;
-    if (conversations.data?.length) setActiveId(conversations.data[0]!.id);
-  }, [open, conversations.data, activeId]);
+    if (open) {
+      setActiveId(null);
+      setInput("");
+    }
+  }, [open]);
 
   if (!can("ai:use") || (status.data && !status.data.configured)) return null;
 
@@ -55,7 +59,8 @@ export function SomAIWidget() {
             <div className="flex items-center justify-between bg-gradient-to-r from-secondary to-primary px-4 py-3 text-white">
               <span className="flex items-center gap-2 font-semibold"><Bot className="size-4" /> Sera</span>
               <span className="flex items-center gap-1">
-                <Button asChild variant="ghost" size="icon-sm" className="text-white hover:bg-white/15" aria-label="Open full page">
+                <Button variant="ghost" size="icon-sm" className="text-white hover:bg-white/15" onClick={() => { setActiveId(null); setInput(""); }} aria-label="New chat" title="New chat"><SquarePen className="size-4" /></Button>
+                <Button asChild variant="ghost" size="icon-sm" className="text-white hover:bg-white/15" aria-label="Open full page" title="History & full page">
                   <Link to="/sera" onClick={() => setOpen(false)}><Maximize2 className="size-4" /></Link>
                 </Button>
                 <Button variant="ghost" size="icon-sm" className="text-white hover:bg-white/15" onClick={() => setOpen(false)} aria-label="Close"><X className="size-4" /></Button>

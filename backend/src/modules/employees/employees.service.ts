@@ -227,6 +227,18 @@ export const employeesService = {
     if (!existing) throw new NotFoundError("Employee");
     if (input.managerId === id) throw new BadRequestError("An employee cannot be their own manager");
 
+    // work-email change → enforce uniqueness and keep the linked login in sync
+    const emailChanged = input.email !== undefined && input.email !== existing.email;
+    if (emailChanged) {
+      const email = input.email as string;
+      if (await prisma.employee.findFirst({ where: { email, NOT: { id } }, select: { id: true } })) {
+        throw new ConflictError("Another employee already uses this work email");
+      }
+      if (existing.userId && (await prisma.user.findFirst({ where: { email, NOT: { id: existing.userId } }, select: { id: true } }))) {
+        throw new ConflictError("This email is already linked to another login account");
+      }
+    }
+
     const updated = await prisma.employee.update({
       where: { id },
       data: {
@@ -236,6 +248,11 @@ export const employeesService = {
           : {}),
       },
     });
+
+    // mirror the new work email onto the login account so sign-in stays consistent
+    if (emailChanged && existing.userId) {
+      await prisma.user.update({ where: { id: existing.userId }, data: { email: input.email as string } });
+    }
 
     // material org changes land on the timeline
     const orgChanged =

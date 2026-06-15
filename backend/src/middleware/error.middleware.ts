@@ -41,7 +41,11 @@ export function errorHandler(
     const meta = (err as { meta?: { target?: string[] | string; field_name?: string } }).meta;
     const map: Record<string, { status: number; code: string; message: string }> = {
       P2002: { status: 409, code: "CONFLICT", message: `That ${[meta?.target].flat().filter(Boolean).join(", ") || "value"} is already in use` },
-      P2003: { status: 400, code: "FK_CONSTRAINT", message: "Related record not found or still referenced" },
+      P2003: {
+        status: 400,
+        code: "FK_CONSTRAINT",
+        message: `A linked record was not found${meta?.field_name ? ` for "${String(meta.field_name).replace(/_fkey.*$/i, "").replace(/^.*?_/, "")}"` : ""}. It may have been removed — reselect a valid option and try again.`,
+      },
       P2025: { status: 404, code: "NOT_FOUND", message: "Record not found" },
     };
     const mapped = map[prismaCode];

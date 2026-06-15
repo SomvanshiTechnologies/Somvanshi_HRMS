@@ -121,11 +121,29 @@ export const profileService = {
   /** Personal info — applies immediately, audited (no HR approval). */
   async updatePersonal(req: Request, input: Record<string, unknown>) {
     const employee = await requireOwnEmployee(req);
+    const { email, ...rest } = input as { email?: string } & Record<string, unknown>;
+
     const data: Prisma.EmployeeUpdateInput = {};
-    for (const [field, value] of Object.entries(input)) {
+    for (const [field, value] of Object.entries(rest)) {
       (data as Record<string, unknown>)[field] = value ?? null;
     }
+
+    // work email change → unique check + keep the login email in sync
+    const emailChanged = typeof email === "string" && email !== employee.email;
+    if (emailChanged) {
+      if (await prisma.employee.findFirst({ where: { email, NOT: { id: employee.id } }, select: { id: true } })) {
+        throw new ConflictError("That work email is already in use");
+      }
+      if (employee.userId && (await prisma.user.findFirst({ where: { email, NOT: { id: employee.userId } }, select: { id: true } }))) {
+        throw new ConflictError("That email is already linked to another login account");
+      }
+      data.email = email;
+    }
+
     const updated = await prisma.employee.update({ where: { id: employee.id }, data });
+    if (emailChanged && employee.userId) {
+      await prisma.user.update({ where: { id: employee.userId }, data: { email } });
+    }
     audit({ action: "profile.personal_update", entity: "Employee", entityId: employee.id, before: employee, after: updated, req });
     return updated;
   },

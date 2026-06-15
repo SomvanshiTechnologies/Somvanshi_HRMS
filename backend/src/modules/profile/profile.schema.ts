@@ -45,13 +45,17 @@ export const CreateChangeRequestSchema = z
 /** Personal info — applies immediately (self-service, audited). Partial update. */
 export const PersonalInfoSchema = z
   .object({
+    email: z.email().toLowerCase(), // work email (also updates the login email)
     personalEmail: z.email().nullable(),
     phone: z.string().min(6).max(20).nullable(),
     altPhone: z.string().min(6).max(20).nullable(),
     currentAddress: z.string().max(1000).nullable(),
     permanentAddress: z.string().max(1000).nullable(),
     bloodGroup: z.string().max(8).nullable(),
-    maritalStatus: z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]),
+    maritalStatus: z.preprocess(
+      (v) => (v === "" || v === null ? undefined : v),
+      z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]).optional()
+    ),
     dateOfBirth: z.coerce.date().nullable(),
   })
   .partial()

@@ -72,13 +72,14 @@ function CompletionRing({ score }: { score: number }) {
 
 /* ---------- personal info edit (→ HR approval) ---------- */
 const PersonalSchema = z.object({
+  email: z.string().email("Enter a valid work email"),
   personalEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().max(20).optional().or(z.literal("")),
   altPhone: z.string().max(20).optional().or(z.literal("")),
   currentAddress: z.string().max(1000).optional().or(z.literal("")),
   permanentAddress: z.string().max(1000).optional().or(z.literal("")),
   bloodGroup: z.string().max(8).optional().or(z.literal("")),
-  maritalStatus: z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]),
+  maritalStatus: z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]).catch("UNDISCLOSED"),
   dateOfBirth: z.string().optional().or(z.literal("")),
 });
 type PersonalValues = z.infer<typeof PersonalSchema>;
@@ -88,6 +89,7 @@ function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; op
   const form = useForm<PersonalValues>({
     resolver: zodResolver(PersonalSchema),
     values: {
+      email: profile.email ?? "",
       personalEmail: profile.personalEmail ?? "",
       phone: profile.phone ?? "",
       altPhone: profile.altPhone ?? "",
@@ -102,6 +104,7 @@ function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; op
   const onSubmit = form.handleSubmit(async (values) => {
     // submit only changed fields
     const current: Record<string, unknown> = {
+      email: profile.email ?? "",
       personalEmail: profile.personalEmail ?? "",
       phone: profile.phone ?? "",
       altPhone: profile.altPhone ?? "",
@@ -132,6 +135,9 @@ function PersonalEditDialog({ profile, open, onClose }: { profile: MyProfile; op
           <DialogDescription>These updates apply immediately.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Work email" htmlFor="we" required error={err.email?.message} hint="Also updates your login email">
+            <Input id="we" type="email" {...form.register("email")} />
+          </FormField>
           <FormField label="Personal email" htmlFor="pe" error={err.personalEmail?.message}>
             <Input id="pe" type="email" {...form.register("personalEmail")} />
           </FormField>

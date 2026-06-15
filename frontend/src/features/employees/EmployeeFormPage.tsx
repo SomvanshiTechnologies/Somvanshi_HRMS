@@ -38,9 +38,10 @@ const Schema = z.object({
   personalEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().max(20).optional().or(z.literal("")),
   dateOfBirth: z.string().optional().or(z.literal("")),
-  gender: z.enum(["MALE", "FEMALE", "OTHER", "UNDISCLOSED"]),
-  maritalStatus: z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]),
-  employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERN", "CONSULTANT"]),
+  // optional selects — fall back to a default instead of erroring on empty/legacy values
+  gender: z.enum(["MALE", "FEMALE", "OTHER", "UNDISCLOSED"]).catch("UNDISCLOSED"),
+  maritalStatus: z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]).catch("UNDISCLOSED"),
+  employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERN", "CONSULTANT"]).catch("FULL_TIME"),
   dateOfJoining: z.string().optional().or(z.literal("")),
   departmentId: z.string(),
   designationId: z.string(),
@@ -132,7 +133,7 @@ export function EmployeeFormPage() {
       managerId: values.managerId === NONE ? null : values.managerId,
     };
     if (isEdit) {
-      const { createLoginAccount: _c, email: _e, ...rest } = payload;
+      const { createLoginAccount: _c, ...rest } = payload;
       await update.mutateAsync(rest);
       navigate(`/employees/${id}`);
     } else {
@@ -200,8 +201,8 @@ export function EmployeeFormPage() {
             <FormField label="Last name" htmlFor="lastName" required error={err.lastName?.message}>
               <Input id="lastName" error={!!err.lastName} {...form.register("lastName")} />
             </FormField>
-            <FormField label="Work email" htmlFor="email" required error={err.email?.message}>
-              <Input id="email" type="email" disabled={isEdit} error={!!err.email} {...form.register("email")} />
+            <FormField label="Work email" htmlFor="email" required error={err.email?.message} hint={isEdit ? "Also updates the employee's login email" : undefined}>
+              <Input id="email" type="email" error={!!err.email} {...form.register("email")} />
             </FormField>
             <FormField label="Personal email" htmlFor="personalEmail" error={err.personalEmail?.message}>
               <Input id="personalEmail" type="email" {...form.register("personalEmail")} />

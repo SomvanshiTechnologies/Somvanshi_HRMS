@@ -4,6 +4,13 @@ import { PageQuerySchema } from "../../shared/pagination.js";
 const GenderEnum = z.enum(["MALE", "FEMALE", "OTHER", "UNDISCLOSED"]);
 const MaritalEnum = z.enum(["SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "UNDISCLOSED"]);
 const EmploymentTypeEnum = z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERN", "CONSULTANT"]);
+
+/**
+ * Treat "" / null as "not provided" so an optional enum falls back to its default
+ * instead of failing with "Invalid option: expected one of …".
+ */
+const optionalEnum = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === "" || v === null ? undefined : v), schema);
 const EmployeeStatusEnum = z.enum([
   "CANDIDATE",
   "ONBOARDING",
@@ -38,15 +45,15 @@ export const CreateEmployeeSchema = z.object({
   personalEmail: z.email().optional().nullable(),
   phone: z.string().max(20).optional().nullable(),
   dateOfBirth: z.coerce.date().optional().nullable(),
-  gender: GenderEnum.default("UNDISCLOSED"),
-  maritalStatus: MaritalEnum.default("UNDISCLOSED"),
+  gender: optionalEnum(GenderEnum.default("UNDISCLOSED")),
+  maritalStatus: optionalEnum(MaritalEnum.default("UNDISCLOSED")),
   bloodGroup: z.string().max(8).optional().nullable(),
   nationality: z.string().max(60).optional().nullable(),
   currentAddress: z.string().max(1000).optional().nullable(),
   permanentAddress: z.string().max(1000).optional().nullable(),
 
-  status: EmployeeStatusEnum.default("ONBOARDING"),
-  employmentType: EmploymentTypeEnum.default("FULL_TIME"),
+  status: optionalEnum(EmployeeStatusEnum.default("ONBOARDING")),
+  employmentType: optionalEnum(EmploymentTypeEnum.default("FULL_TIME")),
   dateOfJoining: z.coerce.date().optional().nullable(),
   probationEndsAt: z.coerce.date().optional().nullable(),
   confirmedAt: z.coerce.date().optional().nullable(),
