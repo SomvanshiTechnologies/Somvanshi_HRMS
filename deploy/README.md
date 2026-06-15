@@ -1,61 +1,86 @@
 # Deploying Somvanshi HRMS on AWS
 
-Single EC2 instance (Nginx + Node/PM2) + RDS MySQL. The frontend calls the API
-with relative paths, so Nginx serves the SPA and reverse-proxies the API on the
-same origin — no CORS setup needed.
+Production topology: the SPA is served by **CloudFront + S3**; the API runs on
+**EC2** (Node + PM2 behind Nginx); data lives in **RDS MySQL**; uploads go to
+**S3**; email is sent via **SES**; logs/metrics flow to **CloudWatch**.
 
-## Architecture
+CloudFront is the single public entry point: it serves the SPA by default and
+routes `/api/*` + `/socket.io/*` to the EC2 origin. That keeps the app
+same-origin, so the strict httpOnly auth cookie and relative API paths work
+unchanged. (You can instead split the API onto `api.yourdomain.com` and set
+`VITE_API_URL` at build time — see [PRODUCTION.md](./PRODUCTION.md).)
 
-| Component            | AWS service        | Notes                                            |
-| -------------------- | ------------------ | ------------------------------------------------ |
-| Frontend (Vite SPA)  | Nginx on EC2       | Static `frontend/dist`, proxies `/api` + `/socket.io` |
-| Backend (Express)    | EC2 via PM2        | Port 5000                                        |
-| Database (MySQL 8)   | RDS for MySQL      | `db.t3.micro` to start                           |
-| File uploads         | EBS (EC2 disk)     | `STORAGE_DRIVER=local`, `UPLOAD_DIR=~/app/uploads` |
-| HTTPS / domain       | Route 53 + Certbot | Free Let's Encrypt TLS                           |
+## 1. Infrastructure diagram
 
-## 1. RDS MySQL
-- RDS → Create → MySQL 8.0, `db.t3.micro`, 20 GB gp3, DB name `somhr`.
-- Same VPC as EC2, **Public access: No**.
-- Security group: inbound **3306** from the EC2 security group only.
+```
+                            ┌──────────────┐
+        Users ─────────────▶│   Route 53   │  hr.yourdomain.com
+                            └──────┬───────┘
+                                   ▼
+                          ┌─────────────────┐
+                          │   CloudFront    │   ACM TLS · single domain
+                          └───┬─────────┬───┘
+                  default /*  │         │  /api/*  /socket.io/*
+                              ▼         ▼
+                    ┌──────────────┐  ┌──────────────┐
+                    │   S3 bucket  │  │  ALB (HTTPS) │   (or HTTP origin)
+                    │  SPA / static│  └──────┬───────┘
+                    └──────────────┘         ▼
+                                     ┌──────────────────┐
+                                     │  EC2  (Ubuntu)   │
+                                     │  Nginx :80       │
+                                     │   └─ PM2 → Node  │  somhr-api :5000
+                                     └───┬───────┬───┬──┘
+                          ┌──────────────┘       │   └──────────────┐
+                          ▼                       ▼                  ▼
+                 ┌────────────────┐     ┌──────────────────┐  ┌───────────┐
+                 │  RDS MySQL 8   │     │  S3 (uploads)    │  │   SES     │
+                 │  (Multi-AZ)    │     │  documents/logos │  │  email    │
+                 └────────────────┘     └──────────────────┘  └───────────┘
+                          │                                          ▲
+                          └──── automated backups          IAM role ─┘
+                                                            (S3 + SES)
 
-## 2. EC2
-- Ubuntu 24.04 LTS, `t3.small` (or `t3.medium`), 20–30 GB gp3.
-- Security group inbound: **22** (your IP), **80**, **443**.
-- Allocate + associate an **Elastic IP**.
+   CloudWatch  ◀── EC2 (CloudWatch agent: PM2/Nginx logs, metrics)
+               ◀── RDS / ALB / CloudFront metrics & alarms
+```
 
-## 3. Provision (one-time)
+IAM: the EC2 instance role grants `s3:*Object` on the uploads bucket and
+`ses:SendRawEmail` — so no AWS keys live in `.env`. GitHub Actions assumes a
+separate deploy role via OIDC.
+
+## 2. Documents
+
+| Deliverable | File |
+| --- | --- |
+| Production deployment guide | [PRODUCTION.md](./PRODUCTION.md) |
+| Environment variables | [ENVIRONMENT.md](./ENVIRONMENT.md) |
+| Backup strategy | [BACKUP.md](./BACKUP.md) |
+| Rollback strategy | [ROLLBACK.md](./ROLLBACK.md) |
+| CI/CD workflow | [../.github/workflows/ci-cd.yml](../.github/workflows/ci-cd.yml) |
+
+## 3. Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `deploy/setup.sh` | First-time EC2 backend provisioning (Node, Nginx, PM2, env, bootstrap) |
+| `deploy/backend.sh <cmd>` | `install · build · migrate · seed · start · deploy · all` |
+| `deploy/frontend.sh <cmd>` | `install · build · deploy` (S3 sync + CloudFront invalidation) |
+| `deploy/ecosystem.config.cjs` | PM2 process definition (`somhr-api`) |
+| `deploy/nginx.conf` | API-origin reverse proxy (`/api` + `/socket.io` → :5000) |
+| `deploy/backend.env.production.example` | Production env template |
+
+## 4. TL;DR
+
 ```bash
-ssh -i key.pem ubuntu@<elastic-ip>
+# backend (on EC2, first time)
 git clone https://github.com/SomvanshiTechnologies/Somvanshi_HRMS.git ~/app
-cd ~/app
-./deploy/setup.sh           # prompts you to edit backend/.env, then does everything
+cd ~/app && ./deploy/setup.sh
+
+# frontend (from CI or locally with AWS creds)
+S3_FRONTEND_BUCKET=somhr-frontend \
+CLOUDFRONT_DISTRIBUTION_ID=E123ABC \
+./deploy/frontend.sh all
+
+# thereafter: push to main → GitHub Actions builds, tests, and deploys both.
 ```
-`setup.sh` installs Node/Nginx/PM2, builds backend + frontend, creates the schema
-on RDS (`prisma db push`), seeds data, starts the API under PM2, and wires up Nginx.
-
-## 4. Domain + HTTPS
-- Route 53: A record `hr.yourdomain.com` → Elastic IP.
-- Edit `server_name` in `/etc/nginx/sites-available/somhr`.
-- `sudo certbot --nginx -d hr.yourdomain.com`
-
-## 5. Redeploy after code changes
-```bash
-cd ~/app && ./deploy/deploy.sh
-```
-
-## Files
-- `setup.sh` — first-time server provisioning
-- `deploy.sh` — pull + rebuild + restart (idempotent)
-- `ecosystem.config.cjs` — PM2 process definition
-- `nginx.conf` — SPA + API reverse-proxy site config
-- `backend.env.production.example` — production env template (copy to `backend/.env`)
-
-## Notes
-- **Email is skipped for now** — reset/notification emails are logged, not sent.
-  Set `SMTP_*` (Amazon SES / Zoho / Gmail app password) before real launch.
-- **AI (Sera/JD/resume)** needs `OPENAI_API_KEY` in `backend/.env`.
-- **Schema workflow:** this repo uses schema-first (`prisma db push`). If you later
-  commit migration files, switch `db push` → `prisma migrate deploy` in the scripts.
-- **Backups:** RDS automated backups cover the DB. The `uploads/` dir lives on EBS —
-  add an EBS snapshot schedule (Data Lifecycle Manager) to back up uploaded files.

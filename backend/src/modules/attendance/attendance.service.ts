@@ -3,6 +3,7 @@ import { prisma } from "../../config/db.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
+import { mailService } from "../notifications/mail.service.js";
 import type { AttendanceStatus, Prisma } from "../../generated/prisma/client.js";
 import type { CorrectionRequestInput, ManualMarkInput, PunchInput } from "./attendance.schema.js";
 
@@ -400,6 +401,14 @@ export const attendanceService = {
         body: remarks ?? `For ${dayKey(correction.attendance.date)}`,
         link: "/attendance",
       });
+      const acct = await prisma.user.findUnique({ where: { id: correction.requester.userId }, select: { email: true } });
+      if (acct?.email) {
+        mailService.sendAttendanceCorrection(acct.email, correction.requester.firstName, {
+          date: dayKey(correction.attendance.date),
+          status: decision,
+          note: remarks ?? null,
+        });
+      }
     }
     return prisma.attendanceCorrection.findUnique({ where: { id } });
   },

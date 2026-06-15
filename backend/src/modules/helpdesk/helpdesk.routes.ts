@@ -11,7 +11,15 @@ import { ok, created } from "../../core/http.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
+import { mailService } from "../notifications/mail.service.js";
 import type { Prisma } from "../../generated/prisma/client.js";
+
+/** Resolve a user's email by id (for ticket email notifications). */
+async function emailOf(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  return u?.email ?? null;
+}
 
 const DEPARTMENTS = ["HR", "IT", "FINANCE", "ADMIN"] as const;
 
@@ -117,9 +125,12 @@ helpdeskRouter.post("/tickets", requirePermission(PERMISSIONS.HELPDESK_CREATE), 
   // notify agents of that department
   const agents = await prisma.user.findMany({
     where: { status: "ACTIVE", roles: { some: { role: { name: { in: ["HR_ADMIN", "HR_EXECUTIVE", "SUPER_ADMIN"] } } } } },
-    select: { id: true },
+    select: { id: true, email: true },
   });
   await notifyMany(agents.map((u) => u.id), { type: "ALERT", title: `New ${category.department} ticket: ${ticket.subject}`, body: `${ticket.ticketNumber} · ${ticket.priority}`, link: "/helpdesk" });
+  for (const a of agents) {
+    if (a.email) mailService.sendTicketNotification(a.email, { event: "created", ticketRef: ticket.ticketNumber, subject: ticket.subject, actor: `${ticket.requester.firstName} ${ticket.requester.lastName}`, message: ticket.description.slice(0, 240) });
+  }
   audit({ action: "ticket.create", entity: "Ticket", entityId: ticket.id, req });
   created(res, ticket, `Ticket ${ticket.ticketNumber} raised.`);
 }));
@@ -138,7 +149,11 @@ helpdeskRouter.post("/tickets/:id/comments", validate({ body: CommentSchema }), 
   if (!ticket.firstRespondedAt && agent) await prisma.ticket.update({ where: { id }, data: { firstRespondedAt: new Date() } });
   // notify the other party
   const target = req.user!.id === ticket.requester.userId ? ticket.assignee?.userId : ticket.requester.userId;
-  if (target && !(isInternal && agent)) await notify({ userId: target, type: "INFO", title: `Reply on ${ticket.ticketNumber}`, body: body.slice(0, 120), link: "/helpdesk" });
+  if (target && !(isInternal && agent)) {
+    await notify({ userId: target, type: "INFO", title: `Reply on ${ticket.ticketNumber}`, body: body.slice(0, 120), link: "/helpdesk" });
+    const to = await emailOf(target);
+    if (to) mailService.sendTicketNotification(to, { event: "replied", ticketRef: ticket.ticketNumber, subject: ticket.subject, actor: agent ? "Support agent" : "Requester", message: body.slice(0, 240) });
+  }
   audit({ action: "ticket.comment", entity: "Ticket", entityId: id, req });
   created(res, comment);
 }));
@@ -178,6 +193,8 @@ helpdeskRouter.patch("/tickets/:id/status", validate({ body: StatusSchema }), as
   });
   if (status === "RESOLVED" && ticket.requester.userId) {
     await notify({ userId: ticket.requester.userId, type: "SUCCESS", title: `${ticket.ticketNumber} resolved`, body: ticket.subject, link: "/helpdesk" });
+    const to = await emailOf(ticket.requester.userId);
+    if (to) mailService.sendTicketNotification(to, { event: "resolved", ticketRef: ticket.ticketNumber, subject: ticket.subject });
   }
   audit({ action: "ticket.status", entity: "Ticket", entityId: id, after: { status }, req });
   ok(res, updated, `Ticket ${status.toLowerCase()}.`);

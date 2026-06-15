@@ -1,22 +1,12 @@
 import PDFDocument from "pdfkit";
-import fs from "node:fs";
 import path from "node:path";
-import { env } from "../../config/env.js";
+import { assetBuffer, bundledAsset } from "../files/storage.js";
 
 const NAVY = "#0a3d62";
 const LIGHT = "#63b0cd";
 const SLATE = "#64748b";
 const BORDER = "#e2e8f0";
 const BUNDLED_LOGO = path.resolve(process.cwd(), "assets/logo_STech.jpg");
-
-/** Resolve an uploaded asset URL (e.g. "/api/v1/files/x.png") to an on-disk path. */
-export function assetPath(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const name = url.split("/").pop();
-  if (!name) return null;
-  const p = path.resolve(process.cwd(), env.UPLOAD_DIR, name);
-  try { return fs.existsSync(p) ? p : null; } catch { return null; }
-}
 
 export interface DocumentPdfInput {
   company: { name: string; address: string | null; email: string | null; phone: string | null; website: string | null; tagline: string };
@@ -33,7 +23,10 @@ export interface DocumentPdfInput {
 }
 
 /** Renders a branded company letter / certificate. Resolves to the PDF buffer. */
-export function renderDocumentPdf(d: DocumentPdfInput): Promise<Buffer> {
+export async function renderDocumentPdf(d: DocumentPdfInput): Promise<Buffer> {
+  // Pre-resolve image bytes (disk or S3) before the synchronous draw pass.
+  const logoBuf = (await assetBuffer(d.logoUrl)) ?? bundledAsset(BUNDLED_LOGO);
+  const sigBuf = await assetBuffer(d.signatureUrl);
   return new Promise((resolve, reject) => {
     // bottom margin 0 so the absolutely-positioned footer never triggers an
     // auto page-break (which would add blank trailing pages)
@@ -48,10 +41,9 @@ export function renderDocumentPdf(d: DocumentPdfInput): Promise<Buffer> {
     const W = RX - LX;
 
     // ---------- letterhead ----------
-    const logoFile = assetPath(d.logoUrl) ?? (fs.existsSync(BUNDLED_LOGO) ? BUNDLED_LOGO : null);
     let tx = LX;
-    if (logoFile) {
-      try { doc.image(logoFile, LX, 40, { fit: [46, 46] }); tx = LX + 58; } catch { /* ignore */ }
+    if (logoBuf) {
+      try { doc.image(logoBuf, LX, 40, { fit: [46, 46] }); tx = LX + 58; } catch { /* ignore */ }
     }
     doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(16).text(d.company.name.toUpperCase(), tx, 42);
     doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(LIGHT).text(d.company.tagline, tx, 62);
@@ -95,8 +87,7 @@ export function renderDocumentPdf(d: DocumentPdfInput): Promise<Buffer> {
     // ---------- signatory ----------
     let sy = Math.max(doc.y + 24, doc.page.height - 170);
     doc.font("Helvetica").fontSize(9.5).fillColor("#1e293b").text(`For ${d.company.name},`, LX, sy);
-    const sigFile = assetPath(d.signatureUrl);
-    if (sigFile) { try { doc.image(sigFile, LX, sy + 14, { fit: [130, 34] }); } catch { /* ignore */ } }
+    if (sigBuf) { try { doc.image(sigBuf, LX, sy + 14, { fit: [130, 34] }); } catch { /* ignore */ } }
     sy += 52;
     doc.font("Helvetica-Bold").fontSize(10).fillColor("#1e293b").text(d.signatory.name, LX, sy);
     doc.font("Helvetica").fontSize(9).fillColor(SLATE).text(d.signatory.title, LX, sy + 13);

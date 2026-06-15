@@ -7,8 +7,12 @@ import { useAuthStore } from "@/stores/auth";
  * - transparently refreshes once on 401 (queueing concurrent failures)
  * - normalizes API error shape for UI consumption
  */
+// Same-origin by default (CloudFront routes /api → backend). Set VITE_API_URL
+// at build time to point the SPA at a separate API origin (e.g. api.domain.com).
+const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api/v1`;
+
 export const api = axios.create({
-  baseURL: "/api/v1",
+  baseURL: API_BASE,
   withCredentials: true, // refresh token cookie
   timeout: 30_000,
 });
@@ -23,7 +27,7 @@ let refreshing: Promise<string> | null = null;
 
 async function refreshAccessToken(): Promise<string> {
   const { data } = await axios.post<{ data: { accessToken: string } }>(
-    "/api/v1/auth/refresh",
+    `${API_BASE}/auth/refresh`,
     {},
     { withCredentials: true }
   );

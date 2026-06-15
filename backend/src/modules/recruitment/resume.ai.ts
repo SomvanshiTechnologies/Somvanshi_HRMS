@@ -1,14 +1,11 @@
 // AI resume parsing + scoring. Extracts text from the stored resume file,
 // then uses OpenAI to structure it and (optionally) score it against a posting.
-import fs from "node:fs";
 import path from "node:path";
 import { PDFParse } from "pdf-parse";
 import { prisma } from "../../config/db.js";
-import { env } from "../../config/env.js";
 import { openai, AI_CHAT_MODEL, isAiConfigured, aiErrorMessage } from "../../config/openai.js";
 import { BadRequestError } from "../../core/errors.js";
-
-const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
+import { getObject } from "../files/storage.js";
 
 export interface ParsedResume {
   summary: string;
@@ -23,15 +20,14 @@ export interface ParsedResume {
   experience: Array<{ company: string; role: string; duration: string | null }>;
 }
 
-/** Read the resume file from local storage and extract plain text. */
+/** Read the resume file from storage (disk or S3) and extract plain text. */
 export async function extractResumeText(fileUrl: string, fileName: string): Promise<string> {
   const filename = path.basename(fileUrl);
-  const filePath = path.join(uploadRoot, filename);
-  if (!fs.existsSync(filePath)) throw new BadRequestError("Resume file not found on the server");
+  const buffer = await getObject(filename);
+  if (!buffer) throw new BadRequestError("Resume file not found in storage");
   const ext = path.extname(fileName || filename).toLowerCase();
-  if (ext === ".txt" || ext === ".md") return fs.readFileSync(filePath, "utf8");
+  if (ext === ".txt" || ext === ".md") return buffer.toString("utf8");
   if (ext === ".pdf") {
-    const buffer = fs.readFileSync(filePath);
     const parser = new PDFParse({ data: new Uint8Array(buffer) });
     const result = await parser.getText();
     return result.text;

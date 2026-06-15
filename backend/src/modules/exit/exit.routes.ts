@@ -11,6 +11,7 @@ import { ok, created } from "../../core/http.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
+import { mailService } from "../notifications/mail.service.js";
 import { buildExitDocument, EXIT_DOC_TYPES, type ExitDocType } from "./exit.documents.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 
@@ -292,4 +293,25 @@ exitRouter.get("/:id/documents/:type", asyncHandler(async (req: Request, res: Re
   res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
   audit({ action: "exit.document_generate", entity: "Resignation", entityId: id, after: { type }, req });
   res.send(buffer);
+}));
+
+// ---- email a branded exit document to the employee (HR-initiated delivery) ----
+exitRouter.post("/:id/documents/:type/email", canApprove, asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params["id"] as string;
+  const type = req.params["type"] as ExitDocType;
+  if (!EXIT_DOC_TYPES.includes(type)) throw new BadRequestError(`Unknown document type. One of: ${EXIT_DOC_TYPES.join(", ")}`);
+  const r = await prisma.resignation.findUnique({
+    where: { id },
+    select: { status: true, employee: { select: { firstName: true, lastName: true, personalEmail: true, user: { select: { email: true } } } } },
+  });
+  if (!r) throw new NotFoundError("Resignation");
+  if (!["IN_NOTICE", "EXITED"].includes(r.status)) throw new BadRequestError("Exit documents are available once the resignation is accepted");
+  const to = r.employee.personalEmail || r.employee.user?.email;
+  if (!to) throw new BadRequestError("No email on file for this employee");
+
+  const { buffer, filename } = await buildExitDocument(id, type);
+  const title = type.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  await mailService.sendExitDocument(to, `${r.employee.firstName} ${r.employee.lastName}`, { title, refNo: filename.replace(/\.pdf$/i, ""), pdf: buffer, filename });
+  audit({ action: "exit.document_email", entity: "Resignation", entityId: id, after: { type, to }, req });
+  ok(res, { sent: true, to }, `${title} emailed to ${to}.`);
 }));

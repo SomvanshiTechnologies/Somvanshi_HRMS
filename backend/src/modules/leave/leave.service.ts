@@ -3,6 +3,7 @@ import { prisma } from "../../config/db.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
+import { mailService } from "../notifications/mail.service.js";
 import type { ApplyLeaveInput, WorkflowStep } from "./leave.schema.js";
 import type { LeaveUnit, Prisma } from "../../generated/prisma/client.js";
 
@@ -436,6 +437,20 @@ export const leaveService = {
         link: "/leave",
         entity: "LeaveRequest", entityId: requestId,
       });
+      // email the employee only on the final outcome (not intermediate steps)
+      if (final) {
+        const acct = await prisma.user.findUnique({ where: { id: request.employee.userId }, select: { email: true } });
+        if (acct?.email) {
+          mailService.sendLeaveDecision(acct.email, request.employee.firstName, {
+            leaveType: request.leaveType.name,
+            status: decision,
+            startDate: request.startDate.toISOString().slice(0, 10),
+            endDate: request.endDate.toISOString().slice(0, 10),
+            days: request.days,
+            note: remarks ?? null,
+          });
+        }
+      }
     }
     if (decision === "APPROVED" && !isLastStep) {
       await notifyStepActors(

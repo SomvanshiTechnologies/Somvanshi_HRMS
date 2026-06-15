@@ -2,7 +2,7 @@ import * as React from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight, Bot, CalendarCheck2, CalendarPlus, Cake, ClipboardCheck, FileText,
-  Home, LayoutGrid, LifeBuoy, Plus, SendHorizonal, Sparkles, TrendingUp, Trash2,
+  Home, LayoutGrid, LifeBuoy, Plus, SendHorizonal, TrendingUp, Trash2,
   UserSearch, Users, Wallet,
 } from "lucide-react";
 import { ChatThread, type ChatThreadHandle } from "./ChatThread";

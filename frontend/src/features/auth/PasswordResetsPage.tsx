@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Check, KeyRound, ShieldAlert, X } from "lucide-react";
 import { useApproveReset, useRejectReset, useResetRequests, type ResetRequest } from "./usePasswordResets";
 import { apiErrorMessage } from "@/lib/api";
-import { cn, formatDateTime, initials } from "@/lib/utils";
+import { formatDateTime, initials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

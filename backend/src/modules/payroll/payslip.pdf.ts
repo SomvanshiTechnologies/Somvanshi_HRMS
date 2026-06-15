@@ -1,18 +1,8 @@
 ﻿import PDFDocument from "pdfkit";
-import fs from "node:fs";
 import path from "node:path";
-import { env } from "../../config/env.js";
+import { assetBuffer, bundledAsset } from "../files/storage.js";
 
 const LOGO_PATH = path.resolve(process.cwd(), "assets/logo_STech.jpg");
-
-/** Resolve a branding asset URL (e.g. "/api/v1/files/x.png") to an on-disk path, if it exists. */
-function assetPath(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const name = url.split("/").pop();
-  if (!name) return null;
-  const p = path.resolve(process.cwd(), env.UPLOAD_DIR, name);
-  try { return fs.existsSync(p) ? p : null; } catch { return null; }
-}
 
 export interface PayslipPdfData {
   company: {
@@ -69,7 +59,10 @@ function numberToWords(num: number): string {
 }
 
 /** Renders a professional branded payslip; resolves to the PDF buffer. */
-export function renderPayslipPdf(data: PayslipPdfData): Promise<Buffer> {
+export async function renderPayslipPdf(data: PayslipPdfData): Promise<Buffer> {
+  // Pre-resolve image bytes (disk or S3) before the synchronous draw pass.
+  const logoBuf = (await assetBuffer(data.branding?.logoUrl)) ?? bundledAsset(LOGO_PATH);
+  const sigBuf = await assetBuffer(data.branding?.signatureUrl);
   return new Promise((resolve, reject) => {
     // bottom margin 0 so the absolutely-positioned footer never triggers
     // pdfkit's auto page-break (which was adding blank trailing pages)
@@ -89,12 +82,11 @@ export function renderPayslipPdf(data: PayslipPdfData): Promise<Buffer> {
     doc.rect(0, bandH, doc.page.width, 4).fill(LIGHT); // accent rule
 
     // brand logo on a white chip (admin-uploaded branding logo wins, else bundled, else text-only)
-    const logoFile = assetPath(data.branding?.logoUrl) ?? (fs.existsSync(LOGO_PATH) ? LOGO_PATH : null);
     let hasLogo = false;
     try {
-      if (logoFile) {
+      if (logoBuf) {
         doc.roundedRect(LX, 22, 54, 54, 8).fill("#ffffff");
-        doc.image(logoFile, LX + 6, 28, { fit: [42, 42], align: "center", valign: "center" });
+        doc.image(logoBuf, LX + 6, 28, { fit: [42, 42], align: "center", valign: "center" });
         hasLogo = true;
       }
     } catch {
@@ -227,9 +219,8 @@ export function renderPayslipPdf(data: PayslipPdfData): Promise<Buffer> {
     // ---------------- signatory ----------------
     doc.font("Helvetica").fontSize(8.5).fillColor(SLATE).text("For " + data.company.name, RX - 200, y, { width: 200, align: "right" });
     // signature image (admin-uploaded), if available, sits above the line
-    const sigFile = assetPath(data.branding?.signatureUrl);
-    if (sigFile) {
-      try { doc.image(sigFile, RX - 130, y + 12, { fit: [120, 30], align: "right", valign: "bottom" }); } catch { /* ignore */ }
+    if (sigBuf) {
+      try { doc.image(sigBuf, RX - 130, y + 12, { fit: [120, 30], align: "right", valign: "bottom" }); } catch { /* ignore */ }
     }
     y += 34; // space for signature
     doc.moveTo(RX - 200, y).lineTo(RX, y).strokeColor(BORDER).lineWidth(0.6).stroke();

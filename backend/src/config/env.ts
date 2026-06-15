@@ -24,6 +24,9 @@ const EnvSchema = z.object({
   ACCOUNT_LOCK_MINUTES: z.coerce.number().default(15),
   TWO_FACTOR_ISSUER: z.string().default("SomHR"),
 
+  // Email delivery: "smtp" (nodemailer SMTP) or "ses" (AWS SES via nodemailer's
+  // SES transport — supports attachments + raw MIME like the SMTP path).
+  MAIL_DRIVER: z.enum(["smtp", "ses"]).default("smtp"),
   SMTP_HOST: z.string().default("localhost"),
   SMTP_PORT: z.coerce.number().default(1025),
   SMTP_SECURE: z
@@ -33,12 +36,21 @@ const EnvSchema = z.object({
   SMTP_USER: z.string().optional().default(""),
   SMTP_PASS: z.string().optional().default(""),
   MAIL_FROM: z.string().default("SomHR <no-reply@somvanshitech.com>"),
+  // SES region (falls back to AWS_REGION / S3_REGION when blank)
+  SES_REGION: z.string().optional().default(""),
+
+  // Shared AWS region + (optional) static credentials. On EC2/ECS these are
+  // omitted and the instance/task IAM role is used instead.
+  AWS_REGION: z.string().optional().default(""),
+  AWS_ACCESS_KEY_ID: z.string().optional().default(""),
+  AWS_SECRET_ACCESS_KEY: z.string().optional().default(""),
 
   STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
   UPLOAD_DIR: z.string().default("../uploads"),
   S3_ENDPOINT: z.string().optional().default(""),
   S3_REGION: z.string().optional().default("ap-south-1"),
   S3_BUCKET: z.string().optional().default("somhr"),
+  S3_KEY_PREFIX: z.string().optional().default(""),
   S3_ACCESS_KEY: z.string().optional().default(""),
   S3_SECRET_KEY: z.string().optional().default(""),
 

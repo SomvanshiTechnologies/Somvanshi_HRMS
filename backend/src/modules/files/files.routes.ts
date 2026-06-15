@@ -1,22 +1,20 @@
 import path from "node:path";
-import fs from "node:fs";
 import crypto from "node:crypto";
 import { Router } from "express";
 import type { Request, Response } from "express";
 import multer from "multer";
-import express from "express";
 import { env } from "../../config/env.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
-import { BadRequestError } from "../../core/errors.js";
+import { BadRequestError, NotFoundError } from "../../core/errors.js";
+import { isS3, putObject, getObject, contentTypeFor } from "./storage.js";
 
 /**
- * File storage. Dev: local disk under UPLOAD_DIR, served behind auth.
- * Prod (Phase 8): S3-compatible driver behind the same URL contract.
+ * File storage. Local disk under UPLOAD_DIR (dev / single EC2) or AWS S3 (prod),
+ * selected by STORAGE_DRIVER. Either way the URL contract is the same:
+ *   POST /api/v1/files            → { url: "/api/v1/files/<name>", ... }
+ *   GET  /api/v1/files/<name>     → the bytes, behind auth
  * Stored names are random — original names live in DB rows that point here.
  */
-const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
-fs.mkdirSync(uploadRoot, { recursive: true });
-
 const ALLOWED_MIME = new Set([
   "image/jpeg",
   "image/png",
@@ -26,17 +24,11 @@ const ALLOWED_MIME = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadRoot),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase().slice(0, 10);
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  },
-});
-
-export const upload = multer({
-  storage,
-  limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB
+// Buffer the upload in memory, then hand the bytes to the active storage driver.
+// (8 MB cap — same as before.)
+const upload_ = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_MIME.has(file.mimetype)) {
       cb(new BadRequestError(`File type ${file.mimetype} is not allowed`));
@@ -46,6 +38,8 @@ export const upload = multer({
   },
 });
 
+export const upload = upload_;
+
 export function fileUrl(filename: string): string {
   return `${env.API_PREFIX}/files/${filename}`;
 }
@@ -53,12 +47,15 @@ export function fileUrl(filename: string): string {
 export const filesRouter: Router = Router();
 
 // generic upload endpoint (field name: "file") → { url, name, size, mimeType }
-filesRouter.post("/", requireAuth, upload.single("file"), (req: Request, res: Response) => {
+filesRouter.post("/", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
   if (!req.file) throw new BadRequestError("No file provided (field name must be 'file')");
+  const ext = path.extname(req.file.originalname).toLowerCase().slice(0, 10);
+  const filename = `${crypto.randomUUID()}${ext}`;
+  await putObject(filename, req.file.buffer, req.file.mimetype);
   res.status(201).json({
     success: true,
     data: {
-      url: fileUrl(req.file.filename),
+      url: fileUrl(filename),
       name: req.file.originalname,
       sizeBytes: req.file.size,
       mimeType: req.file.mimetype,
@@ -66,9 +63,13 @@ filesRouter.post("/", requireAuth, upload.single("file"), (req: Request, res: Re
   });
 });
 
-// authenticated static serving
-filesRouter.use(
-  "/",
-  requireAuth,
-  express.static(uploadRoot, { fallthrough: false, index: false, maxAge: "1h" })
-);
+// authenticated download — streams the bytes from disk or S3 through the backend
+// so the auth gate applies regardless of driver.
+filesRouter.get("/:name", requireAuth, async (req: Request, res: Response) => {
+  const name = path.basename(req.params["name"] as string); // guard against path traversal
+  const bytes = await getObject(name);
+  if (!bytes) throw new NotFoundError("File not found");
+  res.setHeader("Content-Type", contentTypeFor(name));
+  res.setHeader("Cache-Control", `private, max-age=${isS3 ? 86400 : 3600}`);
+  res.send(bytes);
+});

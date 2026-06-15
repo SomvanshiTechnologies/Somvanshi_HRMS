@@ -31,7 +31,7 @@ function useSessionBootstrap(): "checking" | "authenticated" | "guest" {
     (async () => {
       try {
         const { data } = await axios.post<{ data: { accessToken: string } }>(
-          "/api/v1/auth/refresh",
+          `${import.meta.env.VITE_API_URL ?? ""}/api/v1/auth/refresh`,
           {},
           { withCredentials: true }
         );

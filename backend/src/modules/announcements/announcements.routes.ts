@@ -13,6 +13,7 @@ import { ok, created, noContent } from "../../core/http.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
 import { notifyMany } from "../notifications/notifications.service.js";
+import { mailService } from "../notifications/mail.service.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 
 const CATEGORIES = ["GENERAL", "POLICY", "EVENT", "CELEBRATION", "ACHIEVEMENT", "URGENT"] as const;
@@ -113,9 +114,15 @@ announcementsRouter.post("/", canManage, validate({ body: CreateSchema }), async
     ...(body.audience?.departmentIds?.length ? { departmentId: { in: body.audience.departmentIds } } : {}),
     ...(body.audience?.locationIds?.length ? { locationId: { in: body.audience.locationIds } } : {}),
   };
-  const targets = await prisma.employee.findMany({ where, select: { userId: true } });
+  const targets = await prisma.employee.findMany({ where, select: { userId: true, user: { select: { email: true } } } });
   const userIds = targets.map((t) => t.userId).filter((u): u is string => Boolean(u));
   if (userIds.length) await notifyMany(userIds, { type: body.category === "URGENT" ? "ALERT" : "INFO", title: `📣 ${body.title}`, body: body.body.slice(0, 120), link: "/feed" });
+  // email the targeted audience (background, non-blocking)
+  const emails = targets.map((t) => t.user?.email).filter((e): e is string => Boolean(e));
+  if (emails.length) {
+    const author = `${post.author.firstName} ${post.author.lastName}`.trim();
+    mailService.broadcastAnnouncement(emails, { title: body.title, body: body.body, author });
+  }
   audit({ action: "announcement.create", entity: "AnnouncementPost", entityId: post.id, req });
   created(res, shape({ ...post, reactions: [] }, req.user.employeeId), "Announcement published.");
 }));
