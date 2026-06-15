@@ -50,7 +50,20 @@ export function errorHandler(
     };
     const mapped = map[prismaCode];
     if (mapped) {
-      res.status(mapped.status).json({ success: false, error: { code: mapped.code, message: mapped.message } });
+      // Always log constraint errors with the route + Prisma meta so the exact
+      // failing relation is visible in the server console for diagnosis.
+      logger.warn(
+        { path: req.path, method: req.method, prismaCode, meta, detail: (err as Error).message?.split("\n").pop()?.trim() },
+        "prisma constraint error"
+      );
+      res.status(mapped.status).json({
+        success: false,
+        error: {
+          code: mapped.code,
+          message: mapped.message,
+          ...(isProd ? {} : { detail: (err as Error).message?.split("\n").pop()?.trim() }),
+        },
+      });
       return;
     }
   }
