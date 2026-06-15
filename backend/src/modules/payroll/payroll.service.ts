@@ -8,6 +8,7 @@ import { attendanceService } from "../attendance/attendance.service.js";
 import { breakupFromCtc, esiEmployee, monthlyTds, PAYROLL_STATUTORY_DEDUCTIONS, pfEmployee, professionalTax, round2 } from "./payroll.calc.js";
 import { renderPayslipPdf } from "./payslip.pdf.js";
 import { brandingService } from "../branding/branding.service.js";
+import { decryptSafe } from "../../core/fieldCrypto.js";
 import { formatDate } from "../../shared/format.js";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -381,7 +382,7 @@ export const payrollService = {
       deductions: slip.lines.filter((l) => l.type === "DEDUCTION").map((l) => ({ label: l.label, code: l.component.code, amount: Number(l.amount) })),
       totals: { gross: Number(slip.grossEarnings), deductions: Number(slip.totalDeductions), net: Number(slip.netPay) },
       ctc: slip.employee.salaries[0] ? { annual: Number(slip.employee.salaries[0].annualCtc), monthly: Number(slip.employee.salaries[0].monthlyGross) } : null,
-      bank: bank ? { bankName: bank.bankName, accountLast4: bank.accountNumber.slice(-4), ifsc: bank.ifsc ?? null } : null,
+      bank: bank ? { bankName: bank.bankName, accountLast4: (decryptSafe(bank.accountNumber) ?? "").slice(-4), ifsc: bank.ifsc ?? null } : null,
       attendance,
       ytd,
     };
@@ -454,7 +455,7 @@ export const payrollService = {
         designation: slip.employee.designation?.title ?? "—",
         department: slip.employee.department?.name ?? "—",
         email: slip.employee.email,
-        bankLast4: bank?.accountNumber.slice(-4) ?? null,
+        bankLast4: bank ? (decryptSafe(bank.accountNumber) ?? "").slice(-4) : null,
         bankName: bank?.bankName ?? null,
         dateOfJoining: slip.employee.dateOfJoining ? formatDate(slip.employee.dateOfJoining) : null,
       },

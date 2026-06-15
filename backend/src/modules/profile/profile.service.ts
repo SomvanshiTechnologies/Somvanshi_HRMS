@@ -3,6 +3,7 @@ import { prisma } from "../../config/db.js";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
+import { decryptSafe } from "../../core/fieldCrypto.js";
 import type { DocumentCategory, Prisma } from "../../generated/prisma/client.js";
 import { APPROVAL_FIELDS, type ApprovalField, type ProfessionalInfoInput } from "./profile.schema.js";
 
@@ -93,7 +94,7 @@ export const profileService = {
 
     return {
       ...employee,
-      bankDetails: employee.bankDetails.map((b) => ({ ...b, accountNumber: `••••${b.accountNumber.slice(-4)}` })),
+      bankDetails: employee.bankDetails.map((b) => ({ ...b, accountNumber: `••••${(decryptSafe(b.accountNumber) ?? "").slice(-4)}` })),
       completion,
       missingDocuments,
       expiringDocuments,

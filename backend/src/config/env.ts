@@ -17,6 +17,9 @@ const EnvSchema = z.object({
 
   JWT_ACCESS_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
+  // 32-byte key (base64 or hex) for field-level PII encryption. If blank, a key
+  // is derived from JWT_ACCESS_SECRET; set a dedicated key in production.
+  FIELD_ENCRYPTION_KEY: z.string().optional().default(""),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("7d"),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().default(30),

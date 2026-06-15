@@ -7,6 +7,7 @@ import { buildMeta, type PageMeta } from "../../core/http.js";
 import { toSkipTake, safeOrderBy } from "../../shared/pagination.js";
 import { audit } from "../audit/audit.service.js";
 import { mailService } from "../notifications/mail.service.js";
+import { decryptSafe } from "../../core/fieldCrypto.js";
 import { getCompanyId } from "../org/org.service.js";
 import type {
   CreateEmployeeInput,
@@ -154,7 +155,7 @@ export const employeesService = {
     // mask bank account numbers — full value only via dedicated endpoint+permission
     return {
       ...employee,
-      bankDetails: employee.bankDetails.map((b) => ({ ...b, accountNumber: `••••${b.accountNumber.slice(-4)}` })),
+      bankDetails: employee.bankDetails.map((b) => ({ ...b, accountNumber: `••••${(decryptSafe(b.accountNumber) ?? "").slice(-4)}` })),
     };
   },
 

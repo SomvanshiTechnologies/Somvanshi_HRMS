@@ -12,6 +12,7 @@ import { PERMISSIONS } from "../../shared/permissions.js";
 import { ok, created, noContent } from "../../core/http.js";
 import { BadRequestError, NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
+import { encryptStatutoryInput, decryptStatutoryRecord, decryptSafe } from "../../core/fieldCrypto.js";
 
 // ── PII masking ──────────────────────────────────────────────────────────────
 function maskTail(value: string | null, visible = 4): string | null {
@@ -85,19 +86,19 @@ function canSeeFull(req: Request): boolean {
 complianceRouter.get("/me", requirePermission(PERMISSIONS.COMPLIANCE_READ), asyncHandler(async (req: Request, res: Response) => {
   if (!req.user?.employeeId) return void ok(res, null);
   const rec = await prisma.employeeStatutory.findUnique({ where: { employeeId: req.user.employeeId } });
-  ok(res, rec); // own data — unmasked
+  ok(res, decryptStatutoryRecord(rec)); // own data — decrypted, unmasked
 }));
 
 complianceRouter.put("/me", requirePermission(PERMISSIONS.COMPLIANCE_UPDATE), validate({ body: StatutorySchema }), asyncHandler(async (req: Request, res: Response) => {
   if (!req.user?.employeeId) throw new BadRequestError("No employee profile linked");
-  const data = cleanInput(req.body as z.infer<typeof StatutorySchema>);
+  const data = encryptStatutoryInput(cleanInput(req.body as z.infer<typeof StatutorySchema>));
   const rec = await prisma.employeeStatutory.upsert({
     where: { employeeId: req.user.employeeId },
     create: { employeeId: req.user.employeeId, ...data },
     update: { ...data, verifiedAt: null, verifiedBy: null }, // edits reset verification
   });
   audit({ action: "compliance.self_update", entity: "EmployeeStatutory", entityId: rec.id, req });
-  ok(res, rec, "Statutory details saved.");
+  ok(res, decryptStatutoryRecord(rec), "Statutory details saved.");
 }));
 
 // ── directory (HR/Finance) ───────────────────────────────────────────────────
@@ -123,12 +124,12 @@ complianceRouter.get(
     });
     const full = canSeeFull(req);
     const rows = employees.map((e) => {
-      const s = e.statutory;
-      const complete = Boolean(s?.aadhaarNumber && s?.panNumber);
+      const s = decryptStatutoryRecord(e.statutory as Record<string, unknown> | null);
+      const complete = Boolean(s?.["aadhaarNumber"] && s?.["panNumber"]);
       return {
         id: e.id, employeeCode: e.employeeCode, firstName: e.firstName, lastName: e.lastName, photoUrl: e.photoUrl,
         department: e.department?.name ?? null, designation: e.designation?.title ?? null,
-        statutory: full ? s : maskStatutory(s as Record<string, unknown> | null),
+        statutory: full ? s : maskStatutory(s),
         complete,
         verified: Boolean(s?.verifiedAt),
       };
@@ -145,7 +146,7 @@ complianceRouter.put("/employee/:id", canManage, validate({ body: StatutorySchem
   const emp = await prisma.employee.findFirst({ where: { id: employeeId, deletedAt: null }, select: { id: true } });
   if (!emp) throw new NotFoundError("Employee");
   const { verify, ...rest } = req.body as z.infer<typeof StatutorySchema> & { verify?: boolean };
-  const data = cleanInput(rest);
+  const data = encryptStatutoryInput(cleanInput(rest));
   const verifyData = verify ? { verifiedAt: new Date(), verifiedBy: req.user!.id } : {};
   const rec = await prisma.employeeStatutory.upsert({
     where: { employeeId },
@@ -153,7 +154,7 @@ complianceRouter.put("/employee/:id", canManage, validate({ body: StatutorySchem
     update: { ...data, ...verifyData },
   });
   audit({ action: verify ? "compliance.verify" : "compliance.update", entity: "EmployeeStatutory", entityId: rec.id, req });
-  ok(res, rec, verify ? "Verified." : "Updated.");
+  ok(res, decryptStatutoryRecord(rec), verify ? "Verified." : "Updated.");
 }));
 
 // ── statutory registers (PF/PT/ESI/TDS) from payslip lines ───────────────────
@@ -183,9 +184,9 @@ complianceRouter.get(
         employeeId: s.employeeId,
         employeeCode: s.employee.employeeCode,
         name: `${s.employee.firstName} ${s.employee.lastName}`,
-        uan: maskTail(s.employee.statutory?.uanNumber ?? null, 4),
-        esic: maskTail(s.employee.statutory?.esicNumber ?? null, 4),
-        pan: maskTail(s.employee.statutory?.panNumber ?? null, 2),
+        uan: maskTail(decryptSafe(s.employee.statutory?.uanNumber), 4),
+        esic: maskTail(decryptSafe(s.employee.statutory?.esicNumber), 4),
+        pan: maskTail(decryptSafe(s.employee.statutory?.panNumber), 2),
         gross: Number(s.grossEarnings),
         pf: byCode["PF"] ?? 0, pt: byCode["PT"] ?? 0, esi: byCode["ESI"] ?? 0, tds: byCode["TDS"] ?? 0,
       };

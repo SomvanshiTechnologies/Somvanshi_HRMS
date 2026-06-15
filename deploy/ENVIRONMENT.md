@@ -16,6 +16,7 @@ Validated at boot by `src/config/env.ts` — a missing required var stops startu
 | `REDIS_URL` | – | `redis://host:6379` | only when enabled |
 | `JWT_ACCESS_SECRET` | ✅ | 32-byte hex | `openssl rand -hex 32` |
 | `JWT_REFRESH_SECRET` | ✅ | 32-byte hex | distinct from access |
+| `FIELD_ENCRYPTION_KEY` | ✅ (prod) | 32 bytes base64/hex | AES-256-GCM key for PII at rest; blank → derived from `JWT_ACCESS_SECRET`. `openssl rand -base64 32` |
 | `JWT_ACCESS_TTL` | – | `15m` | |
 | `JWT_REFRESH_TTL` | – | `7d` | |
 | `PASSWORD_RESET_TTL_MINUTES` | – | `30` | |

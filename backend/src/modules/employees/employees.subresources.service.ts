@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../config/db.js";
 import { NotFoundError } from "../../core/errors.js";
 import { audit } from "../audit/audit.service.js";
+import { encryptField, decryptSafe } from "../../core/fieldCrypto.js";
 import {
   BankDetailSchema,
   CertificationSchema,
@@ -105,20 +106,21 @@ export const subresourcesService = {
       if (input.isPrimary) {
         await tx.bankDetail.updateMany({ where: { employeeId }, data: { isPrimary: false } });
       }
-      return tx.bankDetail.create({ data: { ...input, employeeId } });
+      return tx.bankDetail.create({ data: { ...input, accountNumber: encryptField(input.accountNumber), employeeId } });
     });
     audit({ action: "employee.bank_add", entity: "BankDetail", entityId: row.id, req }); // no account number in audit
-    return { ...row, accountNumber: `••••${row.accountNumber.slice(-4)}` };
+    return { ...row, accountNumber: `••••${(decryptSafe(row.accountNumber) ?? "").slice(-4)}` };
   },
   async updateBankDetail(employeeId: string, id: string, input: Partial<z.infer<typeof BankDetailSchema>>, req?: Request) {
     const existing = await prisma.bankDetail.findFirst({ where: { id, employeeId } });
     if (!existing) throw new NotFoundError("Bank detail");
     const row = await prisma.$transaction(async (tx) => {
       if (input.isPrimary) await tx.bankDetail.updateMany({ where: { employeeId, NOT: { id } }, data: { isPrimary: false } });
-      return tx.bankDetail.update({ where: { id }, data: input });
+      const data = input.accountNumber !== undefined ? { ...input, accountNumber: encryptField(input.accountNumber) } : input;
+      return tx.bankDetail.update({ where: { id }, data });
     });
     audit({ action: "employee.bank_update", entity: "BankDetail", entityId: id, req });
-    return { ...row, accountNumber: `••••${row.accountNumber.slice(-4)}` };
+    return { ...row, accountNumber: `••••${(decryptSafe(row.accountNumber) ?? "").slice(-4)}` };
   },
   async deleteBankDetail(employeeId: string, id: string, req?: Request): Promise<void> {
     const existing = await prisma.bankDetail.findFirst({ where: { id, employeeId } });
