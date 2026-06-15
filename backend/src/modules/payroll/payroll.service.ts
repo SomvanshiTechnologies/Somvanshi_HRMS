@@ -207,9 +207,11 @@ export const payrollService = {
       const prorate = paidDays / daysInMonth;
 
       const comp = (cid: string) => Number(salary.components.find((c) => c.componentId === cid)?.monthlyAmount ?? 0);
-      const basic = round2(comp(ids.BASIC) * prorate);
-      const hra = round2(comp(ids.HRA) * prorate);
-      const sa = round2(comp(ids.SA) * prorate);
+      // fall back to the flat monthlyGross when a salary has no component breakdown
+      const flat = salary.components.length === 0;
+      const basic = round2((flat ? Number(salary.monthlyGross) : comp(ids.BASIC)) * prorate);
+      const hra = round2((flat ? 0 : comp(ids.HRA)) * prorate);
+      const sa = round2((flat ? 0 : comp(ids.SA)) * prorate);
       const gross = round2(basic + hra + sa);
 
       const pf = PAYROLL_STATUTORY_DEDUCTIONS ? pfEmployee(basic) : 0;
@@ -247,7 +249,7 @@ export const payrollService = {
         status: "PENDING_APPROVAL", processedAt: new Date(),
         totalGross: round2(totalGross), totalDeductions: round2(totalDeductions), totalNet: round2(totalNet),
         employeeCount: count,
-        remarks: skipped.length ? `Skipped: ${skipped.join("; ")}` : null,
+        remarks: skipped.length ? `Skipped ${skipped.length} employee${skipped.length === 1 ? "" : "s"} without a current salary` : null,
       },
     });
     audit({ action: "payroll.run_processed", entity: "PayrollRun", entityId: run.id, after: { month, year, count, totalNet: done.totalNet }, req });

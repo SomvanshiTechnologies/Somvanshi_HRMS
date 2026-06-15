@@ -287,6 +287,35 @@ export const employeesService = {
     return updated;
   },
 
+  /**
+   * Admin-initiated password reset: generates a new temporary password for an
+   * employee's login, forces a change on next sign-in, revokes their sessions,
+   * emails it (best-effort), and RETURNS it so the admin can share it directly.
+   */
+  async resetPassword(employeeId: string, req?: Request): Promise<{ email: string; name: string; tempPassword: string }> {
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true, email: true, userId: true },
+    });
+    if (!employee) throw new NotFoundError("Employee");
+    if (!employee.userId) throw new BadRequestError("This employee has no login account to reset");
+
+    const tempPassword = `Som@${crypto.randomBytes(4).toString("hex")}`;
+    await prisma.user.update({
+      where: { id: employee.userId },
+      data: { passwordHash: await bcrypt.hash(tempPassword, 12), mustChangePassword: true, failedLoginAttempts: 0, lockedUntil: null },
+    });
+    // force re-login everywhere
+    await prisma.session.updateMany({ where: { userId: employee.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    audit({ action: "employee.password_reset", entity: "Employee", entityId: employeeId, req }); // password never logged in audit
+
+    const name = `${employee.firstName} ${employee.lastName}`.trim();
+    void mailService
+      .sendTempPassword(employee.email, employee.firstName, tempPassword)
+      .catch((err: unknown) => logger.warn({ to: employee.email, err: (err as Error).message }, "temp-password email failed (returned to admin instead)"));
+    return { email: employee.email, name, tempPassword };
+  },
+
   async softDelete(id: string, req?: Request): Promise<void> {
     const existing = await prisma.employee.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new NotFoundError("Employee");

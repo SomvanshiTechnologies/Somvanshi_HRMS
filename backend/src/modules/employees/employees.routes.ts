@@ -124,6 +124,15 @@ employeesRouter.delete(
   })
 );
 
+// admin generates a new temporary password and returns it to share with the employee
+employeesRouter.post(
+  "/:id/reset-password",
+  requirePermission(PERMISSIONS.EMPLOYEES_MANAGE),
+  asyncHandler(async (req: Request, res: Response) =>
+    void ok(res, await employeesService.resetPassword(req.params["id"] as string, req), "Temporary password generated — share it with the employee.")
+  )
+);
+
 employeesRouter.post(
   "/:id/lifecycle",
   requirePermission(PERMISSIONS.EMPLOYEES_MANAGE),
