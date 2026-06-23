@@ -51,10 +51,7 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
   const detail = usePayslipDetail(id);
   const email = useEmailPayslip();
   const [showBreakdown, setShowBreakdown] = React.useState(false);
-  const [viewMode, setViewMode] = React.useState<"auto" | "pdf" | "detail">("auto");
   const d = detail.data;
-  const isImported = d?.source === "IMPORTED";
-  const effectiveMode = viewMode === "auto" ? (isImported ? "pdf" : "detail") : viewMode;
   // only show line items / sections that actually carry a value
   const earnings = (d?.earnings ?? []).filter((e) => e.amount !== 0);
   const deductions = (d?.deductions ?? []).filter((e) => e.amount !== 0);
@@ -68,38 +65,27 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
         ) : (
           <>
             {/* header */}
-            <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-5 py-3 shrink-0">
+            <div className="flex items-center justify-between gap-3 bg-secondary px-5 py-4 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <img src={logoUrl} alt="Somvanshi" className="h-12 w-auto shrink-0" />
+                <img src={logoUrl} alt="Somvanshi" className="h-10 w-auto shrink-0" />
                 <div className="min-w-0">
-                  <p className="font-semibold text-text truncate">{d.company.name}</p>
-                  <p className="text-xs text-text-muted">{d.payslipNo ? <span className="font-mono">{d.payslipNo}</span> : "Payslip"} · {d.period.label}</p>
+                  <p className="font-semibold text-white truncate">{d.company.name}</p>
+                  <p className="text-xs text-white/60">{d.payslipNo ? <span className="font-mono">{d.payslipNo}</span> : "Payslip"} · {d.period.label}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Badge variant={paymentBadge(d.payment.status).variant as never}>{paymentBadge(d.payment.status).label}</Badge>
-                <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}><X className="size-4" /></Button>
+                <Badge className="bg-white/15 text-white border-white/20">{paymentBadge(d.payment.status).label}</Badge>
+                <Button variant="ghost" size="icon-sm" className="text-white hover:bg-white/15" aria-label="Close" onClick={onClose}><X className="size-4" /></Button>
               </div>
             </div>
 
             {/* actions */}
             <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-sunken px-5 py-2 shrink-0">
-              <Button size="sm" variant={effectiveMode === "pdf" ? "primary" : "secondary"} onClick={() => setViewMode("pdf")}><FileText className="size-3.5" /> PDF View</Button>
-              <Button size="sm" variant={effectiveMode === "detail" ? "primary" : "secondary"} onClick={() => setViewMode("detail")}><Banknote className="size-3.5" /> Detail View</Button>
               <Button size="sm" variant="secondary" onClick={() => openPayslipPdf(d.id).catch((e) => toast.error(apiErrorMessage(e)))}><Download className="size-3.5" /> Download</Button>
               <Button size="sm" variant="secondary" onClick={() => downloadPayslipCsv(d)}><FileSpreadsheet className="size-3.5" /> Excel</Button>
             </div>
 
             {/* body */}
-            {effectiveMode === "pdf" ? (
-              <div className="flex-1 min-h-0 bg-surface-sunken">
-                <iframe
-                  src={`/api/v1/payroll/payslips/${d.id}/pdf`}
-                  className="w-full h-full min-h-[70vh] border-0"
-                  title="Payslip PDF"
-                />
-              </div>
-            ) : (
             <div className="overflow-y-auto scrollbar-thin p-5 space-y-5 bg-surface-sunken">
               {/* employee summary */}
               <Card className="rounded-xl p-4">
@@ -162,15 +148,34 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
               {/* bank + attendance */}
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card className="rounded-xl p-4">
-                  <p className="text-sm font-semibold text-text mb-3 flex items-center gap-2"><Banknote className="size-4 text-primary dark:text-chart-3" /> Bank & Payment</p>
+                  <p className="text-sm font-semibold text-text mb-3 flex items-center gap-2"><Banknote className="size-4 text-primary dark:text-chart-3" /> Payment Information</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                    <div><span className="text-text-faint">Bank</span><p className="text-text font-medium">{d.bank?.bankName ?? "—"}</p></div>
-                    <div><span className="text-text-faint">Account</span><p className="text-text font-medium font-mono">{d.bank ? `••••${d.bank.accountLast4}` : "—"}</p></div>
-                    <div><span className="text-text-faint">IFSC</span><p className="text-text font-medium font-mono">{d.bank?.ifsc ?? "—"}</p></div>
-                    <div><span className="text-text-faint">Payment Date</span><p className="text-text font-medium">{d.payment.paidAt ? formatDate(d.payment.paidAt) : "—"}</p></div>
-                    <div><span className="text-text-faint">UTR</span><p className="text-text font-medium">{d.payment.utr ?? "—"}</p></div>
+                    <div><span className="text-text-faint">Mode of Payment</span><p className="text-text font-medium">Bank Transfer</p></div>
                     <div><span className="text-text-faint">Status</span><p><Badge variant={paymentBadge(d.payment.status).variant as never}>{paymentBadge(d.payment.status).label}</Badge></p></div>
+                    <div><span className="text-text-faint">Payment Date</span><p className="text-text font-medium">{d.payment.paidAt ? formatDate(d.payment.paidAt) : "—"}</p></div>
+                    <div><span className="text-text-faint">UTR / Ref No</span><p className="text-text font-medium font-mono">{d.payment.utr ?? "—"}</p></div>
                   </div>
+                  {d.company.bankName && (
+                    <>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-faint mt-4 mb-2">Company Bank (Sender)</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div><span className="text-text-faint">Bank Name</span><p className="text-text font-medium">{d.company.bankName}</p></div>
+                        <div><span className="text-text-faint">Account No</span><p className="text-text font-medium font-mono">{d.company.bankAccountNo ?? "—"}</p></div>
+                        <div><span className="text-text-faint">IFSC</span><p className="text-text font-medium font-mono">{d.company.bankIfsc ?? "—"}</p></div>
+                        <div><span className="text-text-faint">Branch</span><p className="text-text font-medium">{d.company.bankBranch ?? "—"}</p></div>
+                      </div>
+                    </>
+                  )}
+                  {d.bank && (
+                    <>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-faint mt-4 mb-2">Employee Bank (Receiver)</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div><span className="text-text-faint">Bank Name</span><p className="text-text font-medium">{d.bank.bankName}</p></div>
+                        <div><span className="text-text-faint">Account</span><p className="text-text font-medium font-mono">••••{d.bank.accountLast4}</p></div>
+                        <div><span className="text-text-faint">IFSC</span><p className="text-text font-medium font-mono">{d.bank.ifsc ?? "—"}</p></div>
+                      </div>
+                    </>
+                  )}
                 </Card>
                 <Card className="rounded-xl p-4">
                   <p className="text-sm font-semibold text-text mb-3 flex items-center gap-2"><CalendarCheck2 className="size-4 text-primary dark:text-chart-3" /> Attendance</p>
@@ -215,7 +220,6 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
 
               <p className="text-[11px] text-text-faint text-center pb-1">This is a system-generated payslip from Somvanshi HRMS and does not require a signature.</p>
             </div>
-            )}
           </>
         )}
       </DialogContent>

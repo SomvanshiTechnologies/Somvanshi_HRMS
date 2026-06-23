@@ -630,7 +630,11 @@ model Company {
   website   String?
   email     String?
   phone     String?
-  address   String?
+  address        String?
+  bankName       String?
+  bankAccountNo  String?
+  bankIfsc       String?
+  bankBranch     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

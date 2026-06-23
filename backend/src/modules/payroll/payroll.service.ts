@@ -615,7 +615,7 @@ export const payrollService = {
             designation: { select: { title: true } },
             location: { select: { name: true } },
             bankDetails: { where: { isPrimary: true }, take: 1 },
-            company: { select: { name: true } },
+            company: { select: { name: true, bankName: true, bankAccountNo: true, bankIfsc: true, bankBranch: true } },
             salaries: { where: { isCurrent: true }, take: 1, select: { annualCtc: true, monthlyGross: true } },
           },
         },
@@ -667,7 +667,13 @@ export const payrollService = {
       status: slip.status,
       source: slip.source,
       payment: { status: slip.run?.status ?? "IMPORTED", paidAt: slip.run?.paidAt ?? null, processedAt: slip.run?.approvedAt ?? null, utr: null as string | null },
-      company: { name: slip.employee.company.name },
+      company: {
+        name: slip.employee.company.name,
+        bankName: slip.employee.company.bankName,
+        bankAccountNo: slip.employee.company.bankAccountNo,
+        bankIfsc: slip.employee.company.bankIfsc,
+        bankBranch: slip.employee.company.bankBranch,
+      },
       employee: {
         id: slip.employee.id,
         name: `${slip.employee.firstName} ${slip.employee.lastName}`,

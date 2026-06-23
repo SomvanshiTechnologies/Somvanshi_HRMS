@@ -78,7 +78,7 @@ export interface PayslipDetail {
   status: string;
   source: string;
   payment: { status: string; paidAt: string | null; processedAt: string | null; utr: string | null };
-  company: { name: string };
+  company: { name: string; bankName: string | null; bankAccountNo: string | null; bankIfsc: string | null; bankBranch: string | null };
   employee: { id: string; name: string; code: string; photoUrl: string | null; designation: string | null; department: string | null; location: string | null; dateOfJoining: string | null; employmentType: string };
   earnings: PayslipLineItem[];
   deductions: PayslipLineItem[];
