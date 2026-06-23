@@ -193,25 +193,25 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
               {/* expandable salary structure / YTD */}
               <Card className="rounded-xl overflow-hidden">
                 <button onClick={() => setShowBreakdown((s) => !s)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-text hover:bg-surface-sunken transition-colors cursor-pointer">
-                  <span className="flex items-center gap-2"><Download className="size-4 text-text-muted" /> Salary structure & Year-to-Date</span>
+                  <span>Salary Structure & Year-to-Date</span>
                   <ChevronDown className={cn("size-4 text-text-muted transition-transform", showBreakdown && "rotate-180")} />
                 </button>
                 {showBreakdown && (
                   <div className="border-t border-border p-4 grid gap-4 sm:grid-cols-2">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">Salary structure</p>
-                      <div className="space-y-1.5 text-xs">
-                        <div className="flex justify-between"><span className="text-text-muted">Monthly gross</span><span className="tabular-nums text-text">{d.ctc ? inr(d.ctc.monthly) : "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-text-muted">Annual CTC</span><span className="tabular-nums text-text">{d.ctc ? inr(d.ctc.annual) : "—"}</span></div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-faint mb-3">Salary Structure</p>
+                      <div className="space-y-2.5 text-xs">
+                        <div className="flex justify-between border-b border-border/60 pb-2"><span className="text-text-muted">Monthly Gross</span><span className="tabular-nums font-medium text-text">{d.ctc ? inr(d.ctc.monthly) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-text-muted">Annual CTC</span><span className="tabular-nums font-medium text-text">{d.ctc ? inr(d.ctc.annual) : "—"}</span></div>
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">Year to Date (FY)</p>
-                      <div className="space-y-1.5 text-xs">
-                        <div className="flex justify-between"><span className="text-text-muted">Gross YTD</span><span className="tabular-nums text-text">{inr(d.ytd.gross)}</span></div>
-                        <div className="flex justify-between"><span className="text-text-muted">Net YTD</span><span className="tabular-nums text-text">{inr(d.ytd.net)}</span></div>
-                        <div className="flex justify-between"><span className="text-text-muted">TDS YTD</span><span className="tabular-nums text-text">{inr(d.ytd.tds)}</span></div>
-                        <div className="flex justify-between"><span className="text-text-muted">PF YTD</span><span className="tabular-nums text-text">{inr(d.ytd.pf)}</span></div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-faint mb-3">Year to Date (FY)</p>
+                      <div className="space-y-2.5 text-xs">
+                        <div className="flex justify-between border-b border-border/60 pb-2"><span className="text-text-muted">Gross YTD</span><span className="tabular-nums font-medium text-text">{inr(d.ytd.gross)}</span></div>
+                        <div className="flex justify-between border-b border-border/60 pb-2"><span className="text-text-muted">Net YTD</span><span className="tabular-nums font-medium text-text">{inr(d.ytd.net)}</span></div>
+                        <div className="flex justify-between border-b border-border/60 pb-2"><span className="text-text-muted">TDS YTD</span><span className="tabular-nums font-medium text-text">{inr(d.ytd.tds)}</span></div>
+                        <div className="flex justify-between"><span className="text-text-muted">PF YTD</span><span className="tabular-nums font-medium text-text">{inr(d.ytd.pf)}</span></div>
                       </div>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Download, Eye, FileText, FileUp, Mail, Receipt, Upload } from "lucide-react";
-import { MONTHS, openPayslipPdf, useMyPayslips, useAllPayslips, useEmailPayslip, useImportSinglePayslip, useSalaryEmployees } from "./usePayroll";
+import { Download, Eye, FileText, FileUp, Mail, Pencil, Receipt, Trash2, Upload } from "lucide-react";
+import { MONTHS, openPayslipPdf, useMyPayslips, useAllPayslips, useEmailPayslip, useImportSinglePayslip, useUpdatePayslip, useDeletePayslip, useSalaryEmployees } from "./usePayroll";
 import { PayslipViewer } from "./PayslipViewer";
 import { ImportDialog } from "@/features/imports/ImportDialog";
 import { ImportHistory } from "@/features/imports/ImportHistory";
@@ -30,6 +30,9 @@ export function PayslipsPage() {
   const emailPayslip = useEmailPayslip();
   const [emailingId, setEmailingId] = React.useState<string | null>(null);
   const singleImport = useImportSinglePayslip();
+  const updatePayslip = useUpdatePayslip();
+  const deletePayslip = useDeletePayslip();
+  const [editSlip, setEditSlip] = React.useState<{ id: string; month: string; year: string; grossEarnings: string; totalDeductions: string; netPay: string; paymentDate: string; transactionId: string; remarks: string; paymentStatus: string } | null>(null);
   const employees = useSalaryEmployees();
   const [singleUploadOpen, setSingleUploadOpen] = React.useState(false);
   const [uploadEmpId, setUploadEmpId] = React.useState("");
@@ -213,6 +216,37 @@ export function PayslipsPage() {
                         >
                           <Download className="size-3.5" />
                         </Button>
+                        {canManage && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Edit payslip"
+                              onClick={() => setEditSlip({
+                                id: slip.id,
+                                month: String(slip.month),
+                                year: String(slip.year),
+                                grossEarnings: String(Number(slip.grossEarnings)),
+                                totalDeductions: String(Number(slip.totalDeductions)),
+                                netPay: String(Number(slip.netPay)),
+                                paymentDate: "",
+                                transactionId: "",
+                                remarks: "",
+                                paymentStatus: "PENDING",
+                              })}
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Delete payslip"
+                              onClick={() => { if (window.confirm("Delete this payslip permanently?")) deletePayslip.mutate(slip.id); }}
+                            >
+                              <Trash2 className="size-3.5 text-danger" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -274,6 +308,88 @@ export function PayslipsPage() {
               }}
             >
               Upload Payslip
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* edit payslip dialog */}
+      <Dialog open={Boolean(editSlip)} onOpenChange={(o) => !o && setEditSlip(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Payslip</DialogTitle>
+            <DialogDescription>Update payment details for this payslip.</DialogDescription>
+          </DialogHeader>
+          {editSlip && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Month" htmlFor="ed-month">
+                  <Select value={editSlip.month} onValueChange={(v) => setEditSlip({ ...editSlip, month: v })}>
+                    <SelectTrigger id="ed-month"><SelectValue /></SelectTrigger>
+                    <SelectContent>{MONTHS.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormField>
+                <FormField label="Year" htmlFor="ed-year">
+                  <Input id="ed-year" type="number" value={editSlip.year} onChange={(e) => setEditSlip({ ...editSlip, year: e.target.value })} />
+                </FormField>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <FormField label="Gross Earnings" htmlFor="ed-gross">
+                  <Input id="ed-gross" type="number" min={0} value={editSlip.grossEarnings} onChange={(e) => setEditSlip({ ...editSlip, grossEarnings: e.target.value })} />
+                </FormField>
+                <FormField label="Deductions" htmlFor="ed-ded">
+                  <Input id="ed-ded" type="number" min={0} value={editSlip.totalDeductions} onChange={(e) => setEditSlip({ ...editSlip, totalDeductions: e.target.value })} />
+                </FormField>
+                <FormField label="Net Pay" htmlFor="ed-net">
+                  <Input id="ed-net" type="number" min={0} value={editSlip.netPay} onChange={(e) => setEditSlip({ ...editSlip, netPay: e.target.value })} />
+                </FormField>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Payment Date" htmlFor="ed-date">
+                  <Input id="ed-date" type="date" value={editSlip.paymentDate} onChange={(e) => setEditSlip({ ...editSlip, paymentDate: e.target.value })} />
+                </FormField>
+                <FormField label="Payment Status" htmlFor="ed-status">
+                  <Select value={editSlip.paymentStatus} onValueChange={(v) => setEditSlip({ ...editSlip, paymentStatus: v })}>
+                    <SelectTrigger id="ed-status"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PENDING">Pending</SelectItem>
+                      <SelectItem value="INITIATED">Initiated</SelectItem>
+                      <SelectItem value="PAID">Paid</SelectItem>
+                      <SelectItem value="FAILED">Failed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+              </div>
+              <FormField label="Transaction / Ref No" htmlFor="ed-txn">
+                <Input id="ed-txn" value={editSlip.transactionId} onChange={(e) => setEditSlip({ ...editSlip, transactionId: e.target.value })} placeholder="e.g. 601011637267" />
+              </FormField>
+              <FormField label="Remarks" htmlFor="ed-remarks">
+                <Input id="ed-remarks" value={editSlip.remarks} onChange={(e) => setEditSlip({ ...editSlip, remarks: e.target.value })} placeholder="Optional note" />
+              </FormField>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setEditSlip(null)}>Cancel</Button>
+            <Button
+              loading={updatePayslip.isPending}
+              onClick={async () => {
+                if (!editSlip) return;
+                await updatePayslip.mutateAsync({
+                  id: editSlip.id,
+                  data: {
+                    grossEarnings: Number(editSlip.grossEarnings) || 0,
+                    totalDeductions: Number(editSlip.totalDeductions) || 0,
+                    netPay: Number(editSlip.netPay) || 0,
+                    ...(editSlip.paymentDate ? { paymentDate: editSlip.paymentDate } : {}),
+                    ...(editSlip.transactionId ? { transactionId: editSlip.transactionId } : {}),
+                    ...(editSlip.remarks ? { remarks: editSlip.remarks } : {}),
+                    paymentStatus: editSlip.paymentStatus,
+                  },
+                });
+                setEditSlip(null);
+              }}
+            >
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

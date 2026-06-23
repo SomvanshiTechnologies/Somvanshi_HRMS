@@ -131,6 +131,18 @@ export function useReplacePayslipPdf() {
   });
 }
 
+export function useDeletePayslip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/payroll/payslips/${id}`),
+    onSuccess: () => {
+      toast.success("Payslip deleted.");
+      void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
 export function useUpdatePayslip() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -106,6 +106,11 @@ payrollRouter.get(
     ok(res, await payrollService.allPayslips(month, year));
   })
 );
+payrollRouter.delete(
+  "/payslips/:id",
+  requirePermission(PERMISSIONS.PAYROLL_MANAGE),
+  asyncHandler(async (req: Request, res: Response) => void ok(res, await payrollService.deletePayslip(req, req.params["id"] as string), "Payslip deleted."))
+);
 payrollRouter.put(
   "/payslips/:id/pdf",
   requirePermission(PERMISSIONS.PAYROLL_MANAGE),

@@ -490,6 +490,15 @@ export const payrollService = {
     return updated;
   },
 
+  async deletePayslip(req: Request, payslipId: string) {
+    const slip = await prisma.payslip.findUnique({ where: { id: payslipId }, select: { id: true, employeeId: true, month: true, year: true } });
+    if (!slip) throw new NotFoundError("Payslip");
+    await prisma.payslipLine.deleteMany({ where: { payslipId } });
+    await prisma.payslip.delete({ where: { id: payslipId } });
+    audit({ action: "payroll.payslip_delete", entity: "Payslip", entityId: payslipId, before: slip, req });
+    return { deleted: true };
+  },
+
   /** Payslip with raw lines + meta — for the admin edit form. */
   async payslipForEdit(payslipId: string) {
     const slip = await prisma.payslip.findUnique({
@@ -551,7 +560,11 @@ export const payrollService = {
           ...(input.payrollNotes !== undefined ? { payrollNotes: input.payrollNotes } : {}),
           ...(input.hrNotes !== undefined ? { hrNotes: input.hrNotes } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
-          ...(totals ? { grossEarnings: totals.gross, totalDeductions: totals.deductions, netPay: totals.net } : {}),
+          ...(totals ? { grossEarnings: totals.gross, totalDeductions: totals.deductions, netPay: totals.net } : {
+            ...(input.grossEarnings !== undefined ? { grossEarnings: input.grossEarnings } : {}),
+            ...(input.totalDeductions !== undefined ? { totalDeductions: input.totalDeductions } : {}),
+            ...(input.netPay !== undefined ? { netPay: input.netPay } : {}),
+          }),
           editedBy: req.user!.id,
           editedAt: new Date(),
         },

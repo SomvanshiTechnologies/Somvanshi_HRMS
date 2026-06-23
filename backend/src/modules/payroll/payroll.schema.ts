@@ -15,6 +15,9 @@ export const PayslipLineInputSchema = z.object({
 
 /** Edit an existing payslip (all fields optional; lines replace the set when given). */
 export const PayslipEditSchema = z.object({
+  grossEarnings: z.number().min(0).optional(),
+  totalDeductions: z.number().min(0).optional(),
+  netPay: z.number().min(0).optional(),
   workingDays: z.number().min(0).max(31).optional(),
   paidDays: z.number().min(0).max(31).optional(),
   lopDays: z.number().min(0).max(31).optional(),
