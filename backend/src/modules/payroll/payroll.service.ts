@@ -5,8 +5,10 @@ import { audit } from "../audit/audit.service.js";
 import { notify } from "../notifications/notifications.service.js";
 import { mailService } from "../notifications/mail.service.js";
 import { attendanceService } from "../attendance/attendance.service.js";
-import { breakupFromCtc, esiEmployee, monthlyTds, PAYROLL_STATUTORY_DEDUCTIONS, pfEmployee, professionalTax, round2 } from "./payroll.calc.js";
+import { breakupFromCtc, esiEmployee, monthlyTds, pfEmployee, professionalTax, round2, DEFAULT_STATUTORY, type StatutoryConfig } from "./payroll.calc.js";
 import { renderPayslipPdf } from "./payslip.pdf.js";
+import { storeUpload, fileUrl } from "../files/files.routes.js";
+import { getObject } from "../files/storage.js";
 import { brandingService } from "../branding/branding.service.js";
 import { decryptSafe } from "../../core/fieldCrypto.js";
 import { formatDate } from "../../shared/format.js";
@@ -20,6 +22,104 @@ async function componentId(code: string): Promise<string> {
 }
 
 export const payrollService = {
+  /* ---------------- statutory config (DB-driven, replaces hardcoded rates) ---------------- */
+
+  /** Load the active statutory config as a calc-ready object, creating defaults on first use. */
+  async statutoryConfig(): Promise<StatutoryConfig> {
+    let row = await prisma.payrollStatutoryConfig.findFirst({ where: { isActive: true }, orderBy: { createdAt: "desc" } });
+    if (!row) row = await prisma.payrollStatutoryConfig.create({ data: {} });
+    return {
+      flatStructure: row.flatStructure,
+      basicPercentOfCtc: row.basicPercentOfCtc,
+      hraPercentOfBasic: row.hraPercentOfBasic,
+      statutoryEnabled: row.statutoryEnabled,
+      pfEnabled: row.pfEnabled,
+      pfRate: row.pfRate,
+      pfWageCap: row.pfWageCap,
+      esiEnabled: row.esiEnabled,
+      esiRate: row.esiRate,
+      esiGrossThreshold: row.esiGrossThreshold,
+      ptEnabled: row.ptEnabled,
+      ptAmount: row.ptAmount,
+      ptGrossThreshold: row.ptGrossThreshold,
+      tdsEnabled: row.tdsEnabled,
+      tdsStandardDeduction: row.tdsStandardDeduction,
+      tdsRebateLimit: row.tdsRebateLimit,
+      tdsCessRate: row.tdsCessRate,
+      tdsSlabs: (row.tdsSlabs as Array<[number, number, number]> | null) ?? null,
+    };
+  },
+
+  /** The raw config row (for the admin UI). */
+  async getStatutoryConfigRow() {
+    let row = await prisma.payrollStatutoryConfig.findFirst({ where: { isActive: true }, orderBy: { createdAt: "desc" } });
+    if (!row) row = await prisma.payrollStatutoryConfig.create({ data: {} });
+    return row;
+  },
+
+  async updateStatutoryConfig(req: Request, input: Record<string, unknown>) {
+    const current = await this.getStatutoryConfigRow();
+    const updated = await prisma.payrollStatutoryConfig.update({
+      where: { id: current.id },
+      data: { ...input, tdsSlabs: input["tdsSlabs"] === undefined ? undefined : (input["tdsSlabs"] as object | null), updatedBy: req.user!.id },
+    });
+    audit({ action: "payroll.statutory_update", entity: "PayrollStatutoryConfig", entityId: updated.id, before: current, after: updated, req });
+    return updated;
+  },
+
+  /* ---------------- salary components & structures (DB-driven CRUD) ---------------- */
+
+  async listComponents() {
+    return prisma.salaryComponent.findMany({ orderBy: [{ displayOrder: "asc" }, { name: "asc" }] });
+  },
+
+  async createComponent(req: Request, input: Record<string, unknown>) {
+    const comp = await prisma.salaryComponent.create({ data: input as never });
+    audit({ action: "payroll.component_create", entity: "SalaryComponent", entityId: comp.id, after: comp, req });
+    return comp;
+  },
+
+  async updateComponent(req: Request, id: string, input: Record<string, unknown>) {
+    const before = await prisma.salaryComponent.findUnique({ where: { id } });
+    if (!before) throw new NotFoundError("Salary component");
+    const comp = await prisma.salaryComponent.update({ where: { id }, data: input as never });
+    audit({ action: "payroll.component_update", entity: "SalaryComponent", entityId: id, before, after: comp, req });
+    return comp;
+  },
+
+  async createStructure(req: Request, input: { name: string; description?: string | null; componentIds?: string[] }) {
+    const structure = await prisma.salaryStructure.create({
+      data: {
+        name: input.name,
+        description: input.description ?? null,
+        components: input.componentIds?.length ? { create: input.componentIds.map((componentId) => ({ componentId })) } : undefined,
+      },
+      include: { components: { include: { component: true } } },
+    });
+    audit({ action: "payroll.structure_create", entity: "SalaryStructure", entityId: structure.id, after: { name: structure.name }, req });
+    return structure;
+  },
+
+  async updateStructure(req: Request, id: string, input: { name?: string; description?: string | null; isActive?: boolean; componentIds?: string[] }) {
+    const before = await prisma.salaryStructure.findUnique({ where: { id } });
+    if (!before) throw new NotFoundError("Salary structure");
+    const structure = await prisma.$transaction(async (tx) => {
+      await tx.salaryStructure.update({
+        where: { id },
+        data: { name: input.name, description: input.description, isActive: input.isActive },
+      });
+      if (input.componentIds) {
+        await tx.salaryStructureComponent.deleteMany({ where: { structureId: id } });
+        if (input.componentIds.length) {
+          await tx.salaryStructureComponent.createMany({ data: input.componentIds.map((componentId) => ({ structureId: id, componentId })) });
+        }
+      }
+      return tx.salaryStructure.findUnique({ where: { id }, include: { components: { include: { component: true } } } });
+    });
+    audit({ action: "payroll.structure_update", entity: "SalaryStructure", entityId: id, before: { name: before.name }, after: { name: input.name }, req });
+    return structure;
+  },
+
   /* ---------------- salary assignment & revisions ---------------- */
 
   async listStructures() {
@@ -50,7 +150,7 @@ export const payrollService = {
     const structure = await prisma.salaryStructure.findUnique({ where: { id: input.structureId } });
     if (!structure) throw new NotFoundError("Salary structure");
 
-    const breakup = breakupFromCtc(input.annualCtc);
+    const breakup = breakupFromCtc(input.annualCtc, await this.statutoryConfig());
     const [basicId, hraId, saId] = await Promise.all([componentId("BASIC"), componentId("HRA"), componentId("SA")]);
 
     const current = await prisma.employeeSalary.findFirst({ where: { employeeId, isCurrent: true } });
@@ -178,6 +278,7 @@ export const payrollService = {
       BASIC: await componentId("BASIC"), HRA: await componentId("HRA"), SA: await componentId("SA"),
       PF: await componentId("PF"), PT: await componentId("PT"), ESI: await componentId("ESI"), TDS: await componentId("TDS"),
     };
+    const cfg = await this.statutoryConfig();
 
     for (const employee of employees) {
       const salary = employee.salaries[0];
@@ -214,10 +315,10 @@ export const payrollService = {
       const sa = round2((flat ? 0 : comp(ids.SA)) * prorate);
       const gross = round2(basic + hra + sa);
 
-      const pf = PAYROLL_STATUTORY_DEDUCTIONS ? pfEmployee(basic) : 0;
-      const pt = PAYROLL_STATUTORY_DEDUCTIONS ? professionalTax(gross) : 0;
-      const esi = PAYROLL_STATUTORY_DEDUCTIONS ? esiEmployee(gross) : 0;
-      const tds = PAYROLL_STATUTORY_DEDUCTIONS ? monthlyTds(Number(salary.annualCtc)) : 0;
+      const pf = cfg.statutoryEnabled ? pfEmployee(basic, cfg) : 0;
+      const pt = cfg.statutoryEnabled ? professionalTax(gross, cfg) : 0;
+      const esi = cfg.statutoryEnabled ? esiEmployee(gross, cfg) : 0;
+      const tds = cfg.statutoryEnabled ? monthlyTds(Number(salary.annualCtc), cfg) : 0;
       const deductions = round2(pf + pt + esi + tds);
       const net = round2(gross - deductions);
 
@@ -304,6 +405,203 @@ export const payrollService = {
     });
   },
 
+  async allPayslips(month?: number, year?: number) {
+    const where: Record<string, unknown> = {};
+    if (year) where.year = year;
+    if (month) where.month = month;
+    return prisma.payslip.findMany({
+      where,
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      take: 500,
+      include: {
+        lines: { orderBy: { displayOrder: "asc" } },
+        employee: { select: { id: true, employeeCode: true, firstName: true, lastName: true, photoUrl: true, department: { select: { name: true } } } },
+      },
+    });
+  },
+
+  /** Import a single historical payslip PDF (pre-HRMS). Mirrors the bulk importer. */
+  async importSinglePayslip(
+    req: Request,
+    input: { employeeId: string; month: number; year: number; netPay?: number; grossEarnings?: number; totalDeductions?: number },
+    file: Express.Multer.File
+  ) {
+    const emp = await prisma.employee.findFirst({ where: { id: input.employeeId, deletedAt: null }, select: { id: true } });
+    if (!emp) throw new NotFoundError("Employee");
+    const dup = await prisma.payslip.findUnique({ where: { employeeId_month_year: { employeeId: input.employeeId, month: input.month, year: input.year } } });
+    if (dup) throw new BadRequestError(`A payslip for ${MONTHS[input.month - 1]} ${input.year} already exists for this employee`);
+
+    const stored = await storeUpload(file);
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { email: true, employee: { select: { firstName: true, lastName: true } } } });
+    const importedByName = user?.employee ? `${user.employee.firstName} ${user.employee.lastName}` : (user?.email ?? null);
+
+    const batch = await prisma.importBatch.create({
+      data: { type: "payslip", fileName: file.originalname, status: "COMPLETED", totalRows: 1, successCount: 1, importedBy: req.user!.id, importedByName, summary: { payslipsCreated: 1 } as object },
+    });
+    const slip = await prisma.payslip.create({
+      data: {
+        employeeId: input.employeeId,
+        month: input.month,
+        year: input.year,
+        workingDays: 0,
+        paidDays: 0,
+        grossEarnings: input.grossEarnings ?? 0,
+        totalDeductions: input.totalDeductions ?? 0,
+        netPay: input.netPay ?? 0,
+        status: "PUBLISHED",
+        source: "IMPORTED",
+        publishedAt: new Date(),
+        pdfUrl: fileUrl(stored),
+        sourceFileName: file.originalname,
+        importBatchId: batch.id,
+      },
+    });
+    audit({ action: "payroll.payslip_import_single", entity: "Payslip", entityId: slip.id, after: { month: input.month, year: input.year, fileName: file.originalname }, req });
+    return slip;
+  },
+
+  async replacePayslipPdf(req: Request, payslipId: string, file: Express.Multer.File) {
+    const slip = await prisma.payslip.findUnique({ where: { id: payslipId }, select: { id: true, pdfUrl: true, employeeId: true, month: true, year: true, source: true } });
+    if (!slip) throw new NotFoundError("Payslip");
+
+    const previousPdfUrl = slip.pdfUrl;
+    const stored = await storeUpload(file);
+    const newPdfUrl = fileUrl(stored);
+
+    const updated = await prisma.payslip.update({
+      where: { id: payslipId },
+      data: {
+        pdfUrl: newPdfUrl,
+        sourceFileName: file.originalname,
+        editedBy: req.user!.id,
+        editedAt: new Date(),
+      },
+    });
+
+    audit({
+      action: "payroll.payslip_replace_pdf",
+      entity: "Payslip",
+      entityId: payslipId,
+      before: { pdfUrl: previousPdfUrl },
+      after: { pdfUrl: newPdfUrl, fileName: file.originalname, replacedBy: req.user!.id, replacedAt: new Date().toISOString() },
+      req,
+    });
+
+    return updated;
+  },
+
+  /** Payslip with raw lines + meta — for the admin edit form. */
+  async payslipForEdit(payslipId: string) {
+    const slip = await prisma.payslip.findUnique({
+      where: { id: payslipId },
+      include: {
+        lines: { orderBy: { displayOrder: "asc" }, include: { component: { select: { code: true, type: true } } } },
+        employee: { select: { firstName: true, lastName: true, employeeCode: true } },
+      },
+    });
+    if (!slip) throw new NotFoundError("Payslip");
+    return slip;
+  },
+
+  /**
+   * Controlled payroll edit (PAYROLL_MANAGE). Replaces line items if provided and
+   * recomputes gross/deductions/net; updates attendance, payment and notes fields.
+   * Every edit is audited with before/after and stamps editedBy/editedAt.
+   */
+  async updatePayslip(req: Request, payslipId: string, input: PayslipEditInput) {
+    const before = await prisma.payslip.findUnique({ where: { id: payslipId }, include: { lines: true } });
+    if (!before) throw new NotFoundError("Payslip");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      let totals: { gross: number; deductions: number; net: number } | null = null;
+      if (input.lines) {
+        await tx.payslipLine.deleteMany({ where: { payslipId } });
+        if (input.lines.length) {
+          await tx.payslipLine.createMany({
+            data: input.lines.map((l, i) => ({
+              payslipId,
+              componentId: l.componentId,
+              type: l.type,
+              label: l.label,
+              amount: l.amount,
+              displayOrder: l.displayOrder ?? i + 1,
+            })),
+          });
+        }
+        const gross = round2(input.lines.filter((l) => l.type === "EARNING").reduce((s, l) => s + l.amount, 0));
+        const deductions = round2(input.lines.filter((l) => l.type === "DEDUCTION").reduce((s, l) => s + l.amount, 0));
+        totals = { gross, deductions, net: round2(gross - deductions) };
+      }
+
+      return tx.payslip.update({
+        where: { id: payslipId },
+        data: {
+          ...(input.workingDays !== undefined ? { workingDays: input.workingDays } : {}),
+          ...(input.paidDays !== undefined ? { paidDays: input.paidDays } : {}),
+          ...(input.lopDays !== undefined ? { lopDays: input.lopDays } : {}),
+          ...(input.holidays !== undefined ? { holidays: input.holidays } : {}),
+          ...(input.weekOffs !== undefined ? { weekOffs: input.weekOffs } : {}),
+          ...(input.overtimeHours !== undefined ? { overtimeHours: input.overtimeHours } : {}),
+          ...(input.transactionId !== undefined ? { transactionId: input.transactionId } : {}),
+          ...(input.paymentRef !== undefined ? { paymentRef: input.paymentRef } : {}),
+          ...(input.paymentDate !== undefined ? { paymentDate: input.paymentDate } : {}),
+          ...(input.bankName !== undefined ? { bankName: input.bankName } : {}),
+          ...(input.paymentStatus !== undefined ? { paymentStatus: input.paymentStatus } : {}),
+          ...(input.remarks !== undefined ? { remarks: input.remarks } : {}),
+          ...(input.payrollNotes !== undefined ? { payrollNotes: input.payrollNotes } : {}),
+          ...(input.hrNotes !== undefined ? { hrNotes: input.hrNotes } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(totals ? { grossEarnings: totals.gross, totalDeductions: totals.deductions, netPay: totals.net } : {}),
+          editedBy: req.user!.id,
+          editedAt: new Date(),
+        },
+      });
+    });
+
+    audit({ action: "payroll.payslip_edit", entity: "Payslip", entityId: payslipId, before, after: updated, req });
+    return updated;
+  },
+
+  /** Manually add a single historical payslip (previous-month record, source = IMPORTED). */
+  async createManualPayslip(req: Request, input: ManualPayslipInput) {
+    const emp = await prisma.employee.findFirst({ where: { id: input.employeeId, deletedAt: null }, select: { id: true } });
+    if (!emp) throw new NotFoundError("Employee");
+    const dup = await prisma.payslip.findUnique({ where: { employeeId_month_year: { employeeId: input.employeeId, month: input.month, year: input.year } } });
+    if (dup) throw new BadRequestError(`A payslip for ${MONTHS[input.month - 1]} ${input.year} already exists for this employee`);
+
+    const gross = input.grossEarnings ?? 0;
+    const deductions = input.totalDeductions ?? round2(Math.max(0, gross - (input.netPay ?? gross)));
+    const net = input.netPay ?? round2(gross - deductions);
+
+    const slip = await prisma.payslip.create({
+      data: {
+        employeeId: input.employeeId,
+        month: input.month,
+        year: input.year,
+        workingDays: input.workingDays ?? 0,
+        paidDays: input.paidDays ?? 0,
+        lopDays: input.lopDays ?? 0,
+        holidays: input.holidays ?? 0,
+        weekOffs: input.weekOffs ?? 0,
+        overtimeHours: input.overtimeHours ?? 0,
+        grossEarnings: gross,
+        totalDeductions: deductions,
+        netPay: net,
+        status: "PUBLISHED",
+        source: "IMPORTED",
+        publishedAt: new Date(),
+        transactionId: input.transactionId ?? null,
+        paymentRef: input.paymentRef ?? null,
+        paymentDate: input.paymentDate ?? null,
+        bankName: input.bankName ?? null,
+        paymentStatus: input.paymentStatus ?? "PENDING",
+        remarks: input.remarks ?? null,
+      },
+    });
+    audit({ action: "payroll.payslip_manual_create", entity: "Payslip", entityId: slip.id, after: { month: input.month, year: input.year, net }, req });
+    return slip;
+  },
+
   /** Rich payslip detail for the modern viewer: employee, lines, attendance, bank, YTD, payment. */
   async payslipDetail(req: Request, payslipId: string) {
     const slip = await prisma.payslip.findUnique({
@@ -367,7 +665,8 @@ export const payrollService = {
       generatedOn: slip.publishedAt ?? slip.createdAt,
       period: { month: slip.month, year: slip.year, label: `${MONTHS[slip.month - 1]} ${slip.year}` },
       status: slip.status,
-      payment: { status: slip.run.status, paidAt: slip.run.paidAt, processedAt: slip.run.approvedAt, utr: null as string | null },
+      source: slip.source,
+      payment: { status: slip.run?.status ?? "IMPORTED", paidAt: slip.run?.paidAt ?? null, processedAt: slip.run?.approvedAt ?? null, utr: null as string | null },
       company: { name: slip.employee.company.name },
       employee: {
         id: slip.employee.id,
@@ -428,12 +727,20 @@ export const payrollService = {
       if (own && slip.status !== "PUBLISHED") throw new NotFoundError("Payslip");
     }
 
+    // Imported payslips are served as their original uploaded PDF (not re-rendered).
+    if (slip.source === "IMPORTED") {
+      const name = slip.pdfUrl?.split("/").pop();
+      const bytes = name ? await getObject(name) : null;
+      if (!bytes) throw new NotFoundError("Imported payslip PDF not found");
+      return bytes;
+    }
+
     // branding (logo / signatory / footer / watermark) — admin-managed, DB-driven
     const branding = await brandingService.get();
     const signatory = branding.signatory;
 
     const bank = slip.employee.bankDetails[0];
-    const issueDate = slip.publishedAt ?? slip.run.approvedAt ?? new Date();
+    const issueDate = slip.publishedAt ?? slip.run?.approvedAt ?? new Date();
     const payslipNo = slip.payslipNo ?? `ST/${slip.year}/P${String((parseInt(slip.id.slice(-5), 36) % 900) + 100)}`;
 
     return renderPayslipPdf({
@@ -465,7 +772,7 @@ export const payrollService = {
       payment: {
         mode: "Bank Transfer",
         refNo: null,
-        paidOn: slip.run.paidAt ? formatDate(slip.run.paidAt) : null,
+        paidOn: slip.run?.paidAt ? formatDate(slip.run.paidAt) : null,
       },
       signatory,
       period: `${MONTHS[slip.month - 1]} ${slip.year}`,

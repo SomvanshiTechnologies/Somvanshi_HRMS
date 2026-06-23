@@ -152,14 +152,87 @@ export function useDecideCorrection() {
   });
 }
 
-export async function downloadAttendanceCsv(month: number, year: number): Promise<void> {
-  const res = await api.get("/attendance/export", { params: { month, year }, responseType: "blob" });
+export interface ReportRow {
+  employee: { id: string; employeeCode: string; name: string; department: string };
+  monthly: Record<string, { present: number; absent: number; halfDay: number; onLeave: number; late: number; workMinutes: number; workingDays: number }>;
+  totals: { present: number; absent: number; halfDay: number; onLeave: number; late: number; workMinutes: number; workingDays: number };
+}
+
+export interface AttendanceReport {
+  year: number;
+  months: number[];
+  rows: ReportRow[];
+}
+
+export const useAttendanceReport = (year: number, month?: number, departmentId?: string) =>
+  useQuery({
+    queryKey: ["attendance", "report", year, month, departmentId],
+    queryFn: () =>
+      get<AttendanceReport>("/attendance/report", { year, ...(month ? { month } : {}), ...(departmentId ? { departmentId } : {}) }),
+  });
+
+export async function downloadAttendanceCsv(year: number, month?: number, departmentId?: string): Promise<void> {
+  const params: Record<string, unknown> = { year };
+  if (month) params.month = month;
+  if (departmentId) params.departmentId = departmentId;
+  const res = await api.get("/attendance/export", { params, responseType: "blob" });
+  const tag = month ? `${year}-${String(month).padStart(2, "0")}` : `${year}`;
   const url = URL.createObjectURL(res.data as Blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `somhr-attendance-${year}-${String(month).padStart(2, "0")}.csv`;
+  a.download = `somhr-attendance-${tag}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export function useDeleteAttendance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { employeeId: string; date: string }) =>
+      api.delete(`/attendance/record/${input.employeeId}/${input.date}`),
+    onSuccess: () => {
+      toast.success("Attendance record deleted.");
+      void queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
+// ---- admin manual marking ----
+
+export interface ManualMarkInput {
+  employeeId: string;
+  date: string; // yyyy-mm-dd
+  status: string;
+  checkInAt?: string | null;
+  checkOutAt?: string | null;
+  remarks?: string;
+}
+
+export function useManualMark() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ManualMarkInput) => api.post("/attendance/manual", input),
+    onSuccess: () => {
+      toast.success("Attendance saved.");
+      void queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
+export function useBulkMark() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { employeeIds: string[]; date: string; status: string; remarks?: string }) =>
+      api.post("/attendance/manual/bulk", input),
+    onSuccess: (res) => {
+      const count = (res.data as { data?: { count?: number } }).data?.count ?? 0;
+      toast.success(`Updated ${count} record${count === 1 ? "" : "s"}.`);
+      void queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
 }
 
 // ---- shifts ----

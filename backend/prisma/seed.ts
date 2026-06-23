@@ -184,28 +184,31 @@ async function seedAdmin(companyId: string): Promise<void> {
 }
 
 async function seedLeaveConfig(): Promise<void> {
-  // The 7 statutory leave types + default policies (platform configuration,
-  // editable by HR — not business records).
   const types: Array<{
     name: string; code: string; isPaid: boolean; colorHex: string;
     quota: number; accrual: "MONTHLY" | "YEARLY" | "NONE";
     carryForward?: number; noticeDays?: number; requiresDocument?: boolean;
-    genderRestriction?: "MALE" | "FEMALE";
+    genderRestriction?: "MALE" | "FEMALE"; maxConsecutiveDays?: number;
+    description?: string;
   }> = [
-    { name: "Casual Leave", code: "CL", isPaid: true, colorHex: "#2e86ab", quota: 12, accrual: "MONTHLY" },
-    { name: "Sick Leave", code: "SL", isPaid: true, colorHex: "#f59e0b", quota: 10, accrual: "MONTHLY", requiresDocument: true },
-    { name: "Earned Leave", code: "EL", isPaid: true, colorHex: "#22c55e", quota: 15, accrual: "MONTHLY", carryForward: 30, noticeDays: 7 },
-    { name: "Maternity Leave", code: "ML", isPaid: true, colorHex: "#8b5cf6", quota: 182, accrual: "NONE", genderRestriction: "FEMALE", requiresDocument: true },
-    { name: "Paternity Leave", code: "PL", isPaid: true, colorHex: "#63b0cd", quota: 15, accrual: "NONE", genderRestriction: "MALE" },
-    { name: "Compensatory Off", code: "CO", isPaid: true, colorHex: "#0a3d62", quota: 0, accrual: "NONE" },
-    { name: "Loss of Pay", code: "LOP", isPaid: false, colorHex: "#ef4444", quota: 0, accrual: "NONE" },
+    { name: "Casual Leave", code: "CL", isPaid: true, colorHex: "#2e86ab", quota: 12, accrual: "MONTHLY", description: "For personal/urgent matters" },
+    { name: "Sick Leave", code: "SL", isPaid: true, colorHex: "#f59e0b", quota: 12, accrual: "MONTHLY", requiresDocument: true, description: "Medical leave; document required for 3+ days" },
+    { name: "Earned Leave", code: "EL", isPaid: true, colorHex: "#22c55e", quota: 18, accrual: "MONTHLY", carryForward: 30, noticeDays: 7, description: "Privilege leave; earned monthly, carry-forward allowed" },
+    { name: "Compensatory Off", code: "CO", isPaid: true, colorHex: "#0a3d62", quota: 0, accrual: "NONE", description: "Approval-based; awarded for working on holidays/weekends" },
+    { name: "Bereavement Leave", code: "BL", isPaid: true, colorHex: "#64748b", quota: 3, accrual: "NONE", description: "In the event of a family member's passing" },
+    { name: "Marriage Leave", code: "MAL", isPaid: true, colorHex: "#ec4899", quota: 5, accrual: "NONE", description: "One-time; for the employee's own marriage" },
+    { name: "Maternity Leave", code: "ML", isPaid: true, colorHex: "#8b5cf6", quota: 182, accrual: "NONE", genderRestriction: "FEMALE", requiresDocument: true, description: "As per Maternity Benefit Act; document required" },
+    { name: "Paternity Leave", code: "PL", isPaid: true, colorHex: "#63b0cd", quota: 15, accrual: "NONE", genderRestriction: "MALE", description: "For new fathers around childbirth" },
+    { name: "Optional Holiday", code: "OH", isPaid: true, colorHex: "#a855f7", quota: 2, accrual: "NONE", description: "Choose 2 from the optional holiday list" },
+    { name: "Work From Home", code: "WFH", isPaid: true, colorHex: "#06b6d4", quota: 48, accrual: "MONTHLY", maxConsecutiveDays: 4, description: "Max 4 days per month; tracked via monthly accrual" },
+    { name: "Loss of Pay", code: "LOP", isPaid: false, colorHex: "#ef4444", quota: 0, accrual: "NONE", description: "Unpaid leave; deducted from salary" },
   ];
 
   for (const t of types) {
     const type = await prisma.leaveType.upsert({
       where: { code: t.code },
-      create: { name: t.name, code: t.code, isPaid: t.isPaid, colorHex: t.colorHex },
-      update: {},
+      create: { name: t.name, code: t.code, isPaid: t.isPaid, colorHex: t.colorHex, description: t.description ?? null },
+      update: { name: t.name, isPaid: t.isPaid, colorHex: t.colorHex, description: t.description ?? null },
     });
     const policy = await prisma.leavePolicy.findFirst({ where: { leaveTypeId: type.id } });
     if (!policy) {
@@ -219,6 +222,19 @@ async function seedLeaveConfig(): Promise<void> {
           noticeDays: t.noticeDays ?? 0,
           requiresDocument: t.requiresDocument ?? false,
           genderRestriction: t.genderRestriction ?? null,
+          maxConsecutiveDays: t.maxConsecutiveDays ?? null,
+        },
+      });
+    } else {
+      await prisma.leavePolicy.update({
+        where: { id: policy.id },
+        data: {
+          annualQuota: t.quota,
+          accrualFrequency: t.accrual,
+          maxCarryForward: t.carryForward ?? 0,
+          requiresDocument: t.requiresDocument ?? false,
+          genderRestriction: t.genderRestriction ?? null,
+          maxConsecutiveDays: t.maxConsecutiveDays ?? null,
         },
       });
     }
@@ -237,14 +253,48 @@ async function seedLeaveConfig(): Promise<void> {
   });
   console.log("✓ leave approval workflow (Manager → HR)");
 
-  // default holiday calendar shell for the current year (HR adds holidays)
-  const year = new Date().getFullYear();
-  await prisma.holidayCalendar.upsert({
-    where: { name_year: { name: "Company Holidays", year } },
-    create: { name: "Company Holidays", year, isDefault: true },
-    update: {},
-  });
-  console.log("✓ holiday calendar shell");
+  // Indian gazetted / national holidays — seeded for current and next year
+  const INDIA_HOLIDAYS: Array<{ name: string; month: number; day: number; optional?: boolean }> = [
+    { name: "New Year's Day", month: 1, day: 1 },
+    { name: "Republic Day", month: 1, day: 26 },
+    { name: "Maha Shivaratri", month: 2, day: 26, optional: true },
+    { name: "Holi", month: 3, day: 14 },
+    { name: "Good Friday", month: 3, day: 29 },
+    { name: "Id-ul-Fitr (Eid)", month: 3, day: 31 },
+    { name: "Ram Navami", month: 4, day: 6, optional: true },
+    { name: "Dr. Ambedkar Jayanti", month: 4, day: 14 },
+    { name: "Mahavir Jayanti", month: 4, day: 10, optional: true },
+    { name: "May Day", month: 5, day: 1 },
+    { name: "Buddha Purnima", month: 5, day: 12, optional: true },
+    { name: "Id-ul-Zuha (Bakrid)", month: 6, day: 7, optional: true },
+    { name: "Muharram", month: 7, day: 6, optional: true },
+    { name: "Independence Day", month: 8, day: 15 },
+    { name: "Janmashtami", month: 8, day: 16, optional: true },
+    { name: "Milad-un-Nabi", month: 9, day: 5, optional: true },
+    { name: "Mahatma Gandhi Jayanti", month: 10, day: 2 },
+    { name: "Dussehra", month: 10, day: 2 },
+    { name: "Diwali", month: 10, day: 20 },
+    { name: "Diwali (Day 2)", month: 10, day: 21 },
+    { name: "Guru Nanak Jayanti", month: 11, day: 5, optional: true },
+    { name: "Christmas", month: 12, day: 25 },
+  ];
+
+  for (const yr of [new Date().getFullYear(), new Date().getFullYear() + 1]) {
+    const cal = await prisma.holidayCalendar.upsert({
+      where: { name_year: { name: "Company Holidays", year: yr } },
+      create: { name: "Company Holidays", year: yr, isDefault: true },
+      update: {},
+    });
+    for (const h of INDIA_HOLIDAYS) {
+      const date = new Date(yr, h.month - 1, h.day);
+      await prisma.holiday.upsert({
+        where: { calendarId_date_name: { calendarId: cal.id, date, name: h.name } },
+        create: { calendarId: cal.id, name: h.name, date, isOptional: h.optional ?? false },
+        update: {},
+      });
+    }
+    console.log(`✓ ${INDIA_HOLIDAYS.length} holidays seeded for ${yr}`);
+  }
 
   // default shift
   const shift = await prisma.shift.findFirst({ where: { name: "General" } });

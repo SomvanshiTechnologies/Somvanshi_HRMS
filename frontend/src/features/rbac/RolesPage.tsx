@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
-  Copy, KeyRound, Lock, Pencil, Plus, Save, Search, ShieldCheck, Sparkles, Trash2, Users,
+  Copy, KeyRound, Lock, Pencil, Plus, Save, Search, ShieldCheck, Trash2, Users,
 } from "lucide-react";
 import {
   useCloneRole, useCreateRole, useDeleteRole, usePermissionCatalog, useRbacUsers,
@@ -26,12 +26,6 @@ import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/compo
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FormField } from "@/components/form-field";
-
-const CARD_ACCENTS = [
-  "from-primary to-(--chart-2)",
-  "from-(--chart-2) to-(--chart-3)",
-  "from-secondary to-primary",
-];
 
 /* ─────────────────────────── role create / edit / clone ─────────────────────────── */
 const RoleFormSchema = z.object({
@@ -298,6 +292,10 @@ export function RolesPage() {
   const [form, setForm] = React.useState<{ mode: "create" | "edit" | "clone"; role: Role | null } | null>(null);
 
   const openRole = roles.data?.find((r) => r.id === openRoleId) ?? null;
+  const totalPerms = Object.values(catalog.data ?? {}).reduce((n, p) => n + p.length, 0);
+  const totalUsers = (roles.data ?? []).reduce((n, r) => n + r.userCount, 0);
+  const systemCount = (roles.data ?? []).filter((r) => r.isSystem).length;
+  const customCount = (roles.data ?? []).length - systemCount;
 
   if (roles.isError) return <ErrorState message={apiErrorMessage(roles.error)} onRetry={() => roles.refetch()} />;
 
@@ -305,56 +303,87 @@ export function RolesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-text">Roles & Permissions</h1>
-          <p className="text-sm text-text-muted">Access is database-driven — changes apply across the platform instantly.</p>
+          <h1 className="text-xl font-bold text-text">Roles & Permissions</h1>
+          <p className="text-sm text-text-muted">Database-driven access control. Changes apply across the platform instantly.</p>
         </div>
-        {canManage && <Button onClick={() => setForm({ mode: "create", role: null })}><Plus /> New role</Button>}
+        {canManage && <Button onClick={() => setForm({ mode: "create", role: null })}><Plus /> New Role</Button>}
       </div>
 
+      {/* summary stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Total Roles", value: roles.data?.length ?? 0, accent: "text-primary", icon: ShieldCheck },
+          { label: "System Roles", value: systemCount, accent: "text-info", icon: Lock },
+          { label: "Custom Roles", value: customCount, accent: "text-success", icon: KeyRound },
+          { label: "Total Users", value: totalUsers, accent: "text-(--chart-6)", icon: Users },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl border border-border bg-surface p-4 flex items-center gap-3">
+            <div className={cn("rounded-lg p-2.5 bg-surface-sunken", s.accent)}><s.icon className="size-5" /></div>
+            <div>
+              <p className={cn("text-xl font-semibold tabular-nums", s.accent)}>{s.value}</p>
+              <p className="text-[11px] uppercase tracking-wide text-text-muted">{s.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* roles table */}
       {roles.isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-xl" />)}
-        </div>
+        <Skeleton className="h-64 rounded-xl" />
+      ) : !(roles.data ?? []).length ? (
+        <EmptyState icon={ShieldCheck} title="No roles yet" description="Create your first role to start managing access." />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {(roles.data ?? []).map((role, i) => (
-            <motion.div
-              key={role.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, delay: Math.min(i * 0.04, 0.3) }}
-              className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-card hover:shadow-raised transition-shadow"
-            >
-              <div className={cn("h-1.5 bg-gradient-to-r", CARD_ACCENTS[i % CARD_ACCENTS.length])} aria-hidden />
-              <button onClick={() => setOpenRoleId(role.id)} className="flex-1 p-5 text-left cursor-pointer">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="rounded-lg bg-primary/10 p-2.5 text-primary dark:text-chart-3"><ShieldCheck className="size-5" /></div>
-                  {role.isSystem && <Badge className="text-[10px]"><Lock className="size-3" /> System</Badge>}
-                </div>
-                <h3 className="mt-3 font-semibold text-text group-hover:text-primary dark:group-hover:text-chart-3 transition-colors">{role.displayName}</h3>
-                <p className="mt-0.5 text-xs text-text-muted line-clamp-2 min-h-8">{role.description}</p>
-                <div className="mt-3 flex items-center gap-4 text-xs text-text-muted">
-                  <span className="inline-flex items-center gap-1.5"><KeyRound className="size-3.5 text-text-faint" /><strong className="text-text tabular-nums">{role.permissions.length}</strong> permissions</span>
-                  <span className="inline-flex items-center gap-1.5"><Users className="size-3.5 text-text-faint" /><strong className="text-text tabular-nums">{role.userCount}</strong> users</span>
-                </div>
-              </button>
-              {canManage && (
-                <div className="flex items-center gap-1 border-t border-border px-3 py-2">
-                  <Button size="sm" variant="ghost" onClick={() => setForm({ mode: "clone", role })}><Copy className="size-3.5" /> Clone</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setForm({ mode: "edit", role })}><Pencil className="size-3.5" /> Edit</Button>
-                  <Button
-                    size="sm" variant="ghost"
-                    className="ml-auto text-danger hover:text-danger disabled:opacity-40"
-                    disabled={role.isSystem || role.userCount > 0 || del.isPending}
-                    title={role.isSystem ? "System roles can't be deleted" : role.userCount > 0 ? "Reassign users first" : undefined}
-                    onClick={() => del.mutate({ id: role.id })}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              )}
-            </motion.div>
-          ))}
+        <div className="rounded-xl border border-border overflow-hidden bg-surface">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-sunken text-left text-[11px] uppercase tracking-wide text-text-muted">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Role</th>
+                <th className="px-4 py-3 font-semibold">Code</th>
+                <th className="px-4 py-3 font-semibold text-center">Permissions</th>
+                <th className="px-4 py-3 font-semibold text-center">Users</th>
+                <th className="px-4 py-3 font-semibold">Type</th>
+                <th className="px-4 py-3 font-semibold w-36">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(roles.data ?? []).map((role) => (
+                <tr key={role.id} className="border-t border-border hover:bg-surface-sunken/40 cursor-pointer" onClick={() => setOpenRoleId(role.id)}>
+                  <td className="px-4 py-3">
+                    <div>
+                      <p className="font-medium text-text">{role.displayName}</p>
+                      <p className="text-[11px] text-text-muted line-clamp-1">{role.description}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3"><code className="text-xs font-mono text-text-faint bg-surface-sunken px-1.5 py-0.5 rounded">{role.name}</code></td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="inline-flex items-center gap-1 text-text tabular-nums font-medium">
+                      <KeyRound className="size-3.5 text-text-faint" /> {role.permissions.length}<span className="text-text-faint font-normal">/{totalPerms}</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center tabular-nums font-medium">{role.userCount}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant={role.isSystem ? "info" : "success"}>{role.isSystem ? "System" : "Custom"}</Badge>
+                  </td>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    {canManage && (
+                      <div className="flex gap-1">
+                        <Button size="icon-sm" variant="ghost" aria-label="Edit" onClick={() => setForm({ mode: "edit", role })}><Pencil className="size-3.5" /></Button>
+                        <Button size="icon-sm" variant="ghost" aria-label="Clone" onClick={() => setForm({ mode: "clone", role })}><Copy className="size-3.5" /></Button>
+                        <Button
+                          size="icon-sm" variant="ghost" aria-label="Delete"
+                          disabled={role.isSystem || role.userCount > 0 || del.isPending}
+                          title={role.isSystem ? "System roles can't be deleted" : role.userCount > 0 ? "Reassign users first" : undefined}
+                          onClick={() => { if (window.confirm(`Delete role "${role.displayName}"?`)) del.mutate({ id: role.id }); }}
+                        >
+                          <Trash2 className="size-3.5 text-danger" />
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -366,16 +395,17 @@ export function RolesPage() {
               <SheetHeader className="pr-10">
                 <div className="flex items-center gap-2">
                   <SheetTitle>{openRole.displayName}</SheetTitle>
-                  {openRole.isSystem && <Badge className="text-[10px]"><Lock className="size-3" /> System</Badge>}
+                  {openRole.isSystem && <Badge variant="info" className="text-[10px]"><Lock className="size-3" /> System</Badge>}
                 </div>
                 <p className="mt-0.5 text-xs text-text-muted font-mono">{openRole.name}</p>
+                {openRole.description && <p className="mt-1 text-sm text-text-muted">{openRole.description}</p>}
               </SheetHeader>
               <SheetBody>
                 <Tabs defaultValue="permissions">
                   <TabsList>
-                    <TabsTrigger value="permissions"><KeyRound className="size-3.5" /> Permissions</TabsTrigger>
-                    <TabsTrigger value="members"><Users className="size-3.5" /> Members</TabsTrigger>
-                    <TabsTrigger value="preview"><Sparkles className="size-3.5" /> View as</TabsTrigger>
+                    <TabsTrigger value="permissions"><KeyRound className="size-3.5" /> Permissions ({openRole.permissions.length})</TabsTrigger>
+                    <TabsTrigger value="members"><Users className="size-3.5" /> Members ({openRole.userCount})</TabsTrigger>
+                    <TabsTrigger value="preview"><ShieldCheck className="size-3.5" /> Preview</TabsTrigger>
                   </TabsList>
                   <TabsContent value="permissions" className="mt-4">
                     <PermissionsTab role={openRole} catalog={catalog.data} canManage={canManage} />
@@ -394,10 +424,6 @@ export function RolesPage() {
       </Sheet>
 
       <RoleFormDialog mode={form?.mode ?? "create"} role={form?.role ?? null} open={Boolean(form)} onClose={() => setForm(null)} />
-
-      {!roles.isLoading && !(roles.data ?? []).length && (
-        <EmptyState icon={ShieldCheck} title="No roles yet" description="Create your first role to start managing access." />
-      )}
     </div>
   );
 }

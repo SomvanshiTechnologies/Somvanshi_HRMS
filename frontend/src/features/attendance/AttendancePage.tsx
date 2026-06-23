@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   AlarmClockCheck,
+  BarChart3,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -12,11 +13,14 @@ import {
   LogIn,
   LogOut,
   Pencil,
+  Trash2,
+  Upload,
   Users,
   X,
 } from "lucide-react";
 import {
   downloadAttendanceCsv,
+  useAttendanceReport,
   useCheckIn,
   useCheckOut,
   useDayView,
@@ -28,8 +32,16 @@ import {
   useRequestCorrection,
   useStartBreak,
   useToday,
+  useBulkMark,
+  useDeleteAttendance,
   type MonthDay,
+  type DayRow,
 } from "./useAttendance";
+import { ManualMarkDialog } from "./ManualMarkDialog";
+import { ImportDialog } from "@/features/imports/ImportDialog";
+import { ImportHistory } from "@/features/imports/ImportHistory";
+import { useAuthStore } from "@/stores/auth";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiErrorMessage } from "@/lib/api";
 import { cn, formatDate, initials } from "@/lib/utils";
@@ -166,16 +178,17 @@ const LEGEND = ["PRESENT", "WORK_FROM_HOME", "HALF_DAY", "ON_LEAVE", "ABSENT", "
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function MonthCalendar({
-  month, year, days, onPrev, onNext, onDayClick,
+  month, year, days, onPrev, onNext, onDayClick, clickableAll,
 }: {
   month: number; year: number; days: MonthDay[];
   onPrev: () => void; onNext: () => void;
   onDayClick?: (day: MonthDay) => void;
+  clickableAll?: boolean;
 }) {
   const firstDow = new Date(year, month - 1, 1).getDay();
   const label = new Date(year, month - 1, 1).toLocaleString("en", { month: "long", year: "numeric" });
   const todayKey = new Date().toLocaleDateString("en-CA");
-  const actionable = (s: string) => s !== "FUTURE" && s !== "WEEK_OFF" && s !== "HOLIDAY";
+  const actionable = (s: string) => (clickableAll ? s !== "FUTURE" : s !== "FUTURE" && s !== "WEEK_OFF" && s !== "HOLIDAY");
 
   return (
     <Card className="rounded-xl overflow-hidden">
@@ -244,12 +257,16 @@ function MonthCalendar({
 /* ---------- my attendance tab ---------- */
 function MyAttendanceTab() {
   const now = new Date();
+  const { can } = usePermissions();
+  const me = useAuthStore((s) => s.user);
+  const canManage = can("attendance:manage") && Boolean(me?.employee);
   const [month, setMonth] = React.useState(now.getMonth() + 1);
   const [year, setYear] = React.useState(now.getFullYear());
   const monthData = useMyMonth(month, year);
   const corrections = useMyCorrections();
   const requestCorrection = useRequestCorrection();
   const [correctionDay, setCorrectionDay] = React.useState<MonthDay | null>(null);
+  const [adminDay, setAdminDay] = React.useState<MonthDay | null>(null);
   const [inTime, setInTime] = React.useState("");
   const [outTime, setOutTime] = React.useState("");
   const [reason, setReason] = React.useState("");
@@ -293,9 +310,13 @@ function MyAttendanceTab() {
             <MonthCalendar
               month={month} year={year}
               days={monthData.data?.days ?? []}
+              clickableAll={canManage}
               onPrev={() => shift(-1)} onNext={() => shift(1)}
               onDayClick={(day) => {
-                if (day.status === "FUTURE" || day.status === "WEEK_OFF" || day.status === "HOLIDAY") return;
+                if (day.status === "FUTURE") return;
+                // Admins edit their own record directly — no correction request needed.
+                if (canManage) { setAdminDay(day); return; }
+                if (day.status === "WEEK_OFF" || day.status === "HOLIDAY") return;
                 setCorrectionDay(day);
                 setInTime(""); setOutTime(""); setReason("");
               }}
@@ -371,18 +392,53 @@ function MyAttendanceTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* admin self-edit (direct, no approval) */}
+      {me?.employee && (
+        <ManualMarkDialog
+          open={Boolean(adminDay)}
+          onOpenChange={(o) => !o && setAdminDay(null)}
+          employee={{ id: me.employee.id, name: `${me.employee.firstName} ${me.employee.lastName}` }}
+          date={adminDay?.date ?? ""}
+          initial={adminDay ? { status: adminDay.status, checkInAt: adminDay.checkInAt, checkOutAt: adminDay.checkOutAt } : undefined}
+        />
+      )}
     </div>
   );
 }
 
 /* ---------- team tab ---------- */
+const BULK_STATUSES = [
+  { value: "PRESENT", label: "Present" },
+  { value: "ABSENT", label: "Absent" },
+  { value: "HALF_DAY", label: "Half Day" },
+  { value: "ON_LEAVE", label: "Leave" },
+  { value: "WORK_FROM_HOME", label: "Work From Home" },
+  { value: "HOLIDAY", label: "Holiday" },
+  { value: "WEEK_OFF", label: "Week Off" },
+];
+
 function TeamTab() {
   const { can } = usePermissions();
+  const canManage = can("attendance:manage");
   const [date, setDate] = React.useState(() => new Date().toLocaleDateString("en-CA"));
   const dayView = useDayView(date, true);
   const pending = usePendingCorrections(can("attendance:approve"));
   const decide = useDecideCorrection();
+  const deleteAtt = useDeleteAttendance();
+  const bulk = useBulkMark();
   const now = new Date();
+
+  const [editRow, setEditRow] = React.useState<DayRow | null>(null);
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = React.useState("PRESENT");
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   const counts = dayView.data?.counts;
 
@@ -391,16 +447,45 @@ function TeamTab() {
       <div className="flex flex-wrap items-center gap-3">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" aria-label="Select date" />
         <div className="flex-1" />
+        {canManage && (
+          <ImportDialog type="attendance" title="Import attendance" onCompleted={() => dayView.refetch()}>
+            <Button variant="secondary" size="sm"><Upload /> Import Excel</Button>
+          </ImportDialog>
+        )}
         {can("attendance:export") && (
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => downloadAttendanceCsv(now.getMonth() + 1, now.getFullYear()).catch((err) => toast.error(apiErrorMessage(err)))}
+            onClick={() => downloadAttendanceCsv(now.getFullYear(), now.getMonth() + 1).catch((err) => toast.error(apiErrorMessage(err)))}
           >
             <Download /> Export month
           </Button>
         )}
       </div>
+
+      {/* bulk action bar */}
+      {canManage && selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+          <span className="text-sm font-medium text-text">{selected.size} selected</span>
+          <Select value={bulkStatus} onValueChange={setBulkStatus}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {BULK_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            loading={bulk.isPending}
+            onClick={async () => {
+              await bulk.mutateAsync({ employeeIds: [...selected], date, status: bulkStatus });
+              setSelected(new Set());
+            }}
+          >
+            Mark {selected.size} for {formatDate(date)}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+        </div>
+      )}
 
       {counts && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -458,7 +543,7 @@ function TeamTab() {
         </Card>
       )}
 
-      {/* roster */}
+      {/* roster table */}
       {dayView.isLoading ? (
         <Skeleton className="h-72 rounded-xl" />
       ) : dayView.isError ? (
@@ -466,31 +551,232 @@ function TeamTab() {
       ) : !dayView.data?.rows.length ? (
         <EmptyState icon={Users} title="No team members in scope" />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {dayView.data.rows.map((row) => (
-            <Card key={row.employee.id} className="rounded-xl p-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Avatar size="sm">
-                  {row.employee.photoUrl && <AvatarImage src={row.employee.photoUrl} alt="" />}
-                  <AvatarFallback>{initials(row.employee.firstName, row.employee.lastName)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-text truncate">
-                    {row.employee.firstName} {row.employee.lastName}
-                  </p>
-                  <p className="text-[11px] text-text-muted truncate">
-                    {fmtTime(row.checkInAt)} → {fmtTime(row.checkOutAt)}
-                    {row.workMinutes ? ` · ${fmtHours(row.workMinutes)}` : ""}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <Badge variant={statusVariant(row.status)}>{row.status.replace(/_/g, " ")}</Badge>
-                {row.isLate && <Badge variant="danger" className="text-[10px]">Late</Badge>}
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card className="rounded-xl overflow-hidden">
+          <div className="overflow-auto scrollbar-thin">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-sunken text-left text-[11px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  {canManage && <th className="px-3 py-2.5 w-10"><input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={selected.size === dayView.data.rows.length && selected.size > 0} onChange={(e) => setSelected(e.target.checked ? new Set(dayView.data!.rows.map((r) => r.employee.id)) : new Set())} aria-label="Select all" /></th>}
+                  <th className="px-3 py-2.5 font-semibold">Employee</th>
+                  <th className="px-3 py-2.5 font-semibold">Department</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Check In</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Check Out</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Hours</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Status</th>
+                  {canManage && <th className="px-3 py-2.5 font-semibold w-12" />}
+                </tr>
+              </thead>
+              <tbody>
+                {dayView.data.rows.map((row) => (
+                  <tr key={row.employee.id} className="border-t border-border hover:bg-surface-sunken/40">
+                    {canManage && (
+                      <td className="px-3 py-2.5">
+                        <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={selected.has(row.employee.id)} onChange={() => toggle(row.employee.id)} aria-label={`Select ${row.employee.firstName}`} />
+                      </td>
+                    )}
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar size="sm">
+                          {row.employee.photoUrl && <AvatarImage src={row.employee.photoUrl} alt="" />}
+                          <AvatarFallback>{initials(row.employee.firstName, row.employee.lastName)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="font-medium text-text truncate">{row.employee.firstName} {row.employee.lastName}</p>
+                          <p className="text-[11px] text-text-faint truncate">{row.employee.employeeCode}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-text-muted">{row.employee.department?.name ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums">{fmtTime(row.checkInAt)}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums">{fmtTime(row.checkOutAt)}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums">{row.workMinutes ? fmtHours(row.workMinutes) : "—"}</td>
+                    <td className="px-3 py-2.5 text-center">
+                      <span className="inline-flex gap-1">
+                        <Badge variant={statusVariant(row.status)}>{row.status.replace(/_/g, " ")}</Badge>
+                        {row.isLate && <Badge variant="danger">Late</Badge>}
+                      </span>
+                    </td>
+                    {canManage && (
+                      <td className="px-3 py-2.5">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon-sm" aria-label="Edit attendance" onClick={() => setEditRow(row)}>
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Delete attendance"
+                            onClick={() => {
+                              if (window.confirm(`Delete attendance record for ${row.employee.firstName} ${row.employee.lastName} on ${formatDate(date)}?`))
+                                deleteAtt.mutate({ employeeId: row.employee.id, date });
+                            }}
+                          >
+                            <Trash2 className="size-3.5 text-danger" />
+                          </Button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {canManage && <ImportHistory type="attendance" title="Attendance import history" />}
+
+      {editRow && (
+        <ManualMarkDialog
+          open={Boolean(editRow)}
+          onOpenChange={(o) => !o && setEditRow(null)}
+          employee={{ id: editRow.employee.id, name: `${editRow.employee.firstName} ${editRow.employee.lastName}` }}
+          date={date}
+          initial={{ status: editRow.status, checkInAt: editRow.checkInAt, checkOutAt: editRow.checkOutAt }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------- reports tab ---------- */
+const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function ReportsTab() {
+  const now = new Date();
+  const [year, setYear] = React.useState(now.getFullYear());
+  const [month, setMonth] = React.useState<number | undefined>(now.getMonth() + 1);
+  const report = useAttendanceReport(year, month);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Select value={String(month ?? "year")} onValueChange={(v) => setMonth(v === "year" ? undefined : Number(v))}>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="year">Full Year</SelectItem>
+            {MONTH_NAMES.slice(1).map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 5 }, (_, i) => now.getFullYear() - i).map((y) => (
+              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex-1" />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => downloadAttendanceCsv(year, month).catch((err) => toast.error(apiErrorMessage(err)))}
+        >
+          <Download /> Download {month ? MONTH_NAMES[month] : "Yearly"} Report
+        </Button>
+      </div>
+
+      {report.isLoading ? (
+        <Skeleton className="h-72 rounded-xl" />
+      ) : report.isError ? (
+        <ErrorState message={apiErrorMessage(report.error)} onRetry={() => report.refetch()} />
+      ) : !report.data?.rows.length ? (
+        <EmptyState icon={Users} title="No attendance data" />
+      ) : month ? (
+        /* ---- monthly table ---- */
+        <Card className="rounded-xl overflow-auto">
+          <div className="scrollbar-thin">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-surface-sunken text-left text-[11px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-3 py-2.5 font-semibold">Code</th>
+                  <th className="px-3 py-2.5 font-semibold">Employee</th>
+                  <th className="px-3 py-2.5 font-semibold">Department</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Working Days</th>
+                  <th className="px-3 py-2.5 font-semibold text-center text-success">Present</th>
+                  <th className="px-3 py-2.5 font-semibold text-center text-warning">Half Day</th>
+                  <th className="px-3 py-2.5 font-semibold text-center text-danger">Absent</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Leave</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Late</th>
+                  <th className="px-3 py-2.5 font-semibold text-center">Hours</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.data.rows.map((row) => {
+                  const t = row.totals;
+                  return (
+                    <tr key={row.employee.id} className="border-t border-border hover:bg-surface-sunken/40">
+                      <td className="px-3 py-2 tabular-nums text-text-muted">{row.employee.employeeCode}</td>
+                      <td className="px-3 py-2 font-medium text-text">{row.employee.name}</td>
+                      <td className="px-3 py-2 text-text-muted">{row.employee.department}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">{t.workingDays}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-success font-medium">{t.present}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-warning font-medium">{t.halfDay}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-danger font-medium">{t.absent}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">{t.onLeave}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">{t.late}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">{fmtHours(t.workMinutes)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : (
+        /* ---- yearly table ---- */
+        <Card className="rounded-xl overflow-auto">
+          <div className="scrollbar-thin">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-surface-sunken text-left text-[11px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-3 py-2.5 font-semibold">Code</th>
+                  <th className="px-3 py-2.5 font-semibold">Employee</th>
+                  <th className="px-3 py-2.5 font-semibold">Department</th>
+                  {report.data.months.map((m) => (
+                    <th key={m} className="px-2 py-2.5 font-semibold text-center" colSpan={3}>{MONTH_NAMES[m]}</th>
+                  ))}
+                  <th className="px-3 py-2.5 font-semibold text-center bg-surface-sunken" colSpan={3}>Total</th>
+                </tr>
+                <tr>
+                  <th colSpan={3} />
+                  {report.data.months.map((m) => (
+                    <React.Fragment key={m}>
+                      <th className="px-1 py-1 text-[9px] text-center text-success">P</th>
+                      <th className="px-1 py-1 text-[9px] text-center text-danger">A</th>
+                      <th className="px-1 py-1 text-[9px] text-center">L</th>
+                    </React.Fragment>
+                  ))}
+                  <th className="px-1 py-1 text-[9px] text-center text-success bg-surface-sunken">P</th>
+                  <th className="px-1 py-1 text-[9px] text-center text-danger bg-surface-sunken">A</th>
+                  <th className="px-1 py-1 text-[9px] text-center bg-surface-sunken">L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.data.rows.map((row) => (
+                  <tr key={row.employee.id} className="border-t border-border hover:bg-surface-sunken/40">
+                    <td className="px-3 py-2 tabular-nums text-text-muted">{row.employee.employeeCode}</td>
+                    <td className="px-3 py-2 font-medium text-text whitespace-nowrap">{row.employee.name}</td>
+                    <td className="px-3 py-2 text-text-muted">{row.employee.department}</td>
+                    {report.data!.months.map((m) => {
+                      const s = row.monthly[String(m)];
+                      return (
+                        <React.Fragment key={m}>
+                          <td className="px-1 py-2 text-center tabular-nums text-success">{s?.present ?? 0}</td>
+                          <td className="px-1 py-2 text-center tabular-nums text-danger">{s?.absent ?? 0}</td>
+                          <td className="px-1 py-2 text-center tabular-nums">{s?.onLeave ?? 0}</td>
+                        </React.Fragment>
+                      );
+                    })}
+                    <td className="px-1 py-2 text-center tabular-nums text-success font-semibold bg-surface-sunken/40">{row.totals.present}</td>
+                    <td className="px-1 py-2 text-center tabular-nums text-danger font-semibold bg-surface-sunken/40">{row.totals.absent}</td>
+                    <td className="px-1 py-2 text-center tabular-nums font-semibold bg-surface-sunken/40">{row.totals.onLeave}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );
@@ -511,9 +797,11 @@ export function AttendancePage() {
           <TabsList>
             <TabsTrigger value="me"><Clock3 /> My Attendance</TabsTrigger>
             <TabsTrigger value="team"><Users /> Team</TabsTrigger>
+            <TabsTrigger value="reports"><BarChart3 /> Reports</TabsTrigger>
           </TabsList>
           <TabsContent value="me"><MyAttendanceTab /></TabsContent>
           <TabsContent value="team"><TeamTab /></TabsContent>
+          <TabsContent value="reports"><ReportsTab /></TabsContent>
         </Tabs>
       ) : (
         <MyAttendanceTab />

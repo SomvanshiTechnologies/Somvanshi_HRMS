@@ -5,7 +5,7 @@ import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
 import { mailService } from "../notifications/mail.service.js";
 import type { AttendanceStatus, Prisma } from "../../generated/prisma/client.js";
-import type { CorrectionRequestInput, ManualMarkInput, PunchInput } from "./attendance.schema.js";
+import type { BulkMarkInput, CorrectionRequestInput, ManualMarkInput, PunchInput } from "./attendance.schema.js";
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -499,6 +499,36 @@ export const attendanceService = {
     return record;
   },
 
+  async deleteRecord(req: Request, employeeId: string, date: Date) {
+    const record = await prisma.attendanceRecord.findUnique({
+      where: { employeeId_date: { employeeId, date } },
+    });
+    if (!record) throw new NotFoundError("Attendance record");
+    await prisma.breakLog.deleteMany({ where: { attendanceId: record.id } });
+    await prisma.attendanceCorrection.deleteMany({ where: { attendanceId: record.id } });
+    await prisma.attendanceRecord.delete({ where: { id: record.id } });
+    audit({ action: "attendance.delete", entity: "AttendanceRecord", entityId: record.id, before: record, req });
+    return { deleted: true };
+  },
+
+  /** Bulk mark the same status for many employees on one date (admin). */
+  async bulkMark(req: Request, input: BulkMarkInput) {
+    const date = localDate(input.date);
+    const employees = await prisma.employee.findMany({
+      where: { id: { in: input.employeeIds }, deletedAt: null },
+      select: { id: true },
+    });
+    for (const e of employees) {
+      await prisma.attendanceRecord.upsert({
+        where: { employeeId_date: { employeeId: e.id, date } },
+        create: { employeeId: e.id, date, status: input.status, remarks: input.remarks ?? null },
+        update: { status: input.status, ...(input.remarks !== undefined ? { remarks: input.remarks } : {}) },
+      });
+    }
+    audit({ action: "attendance.bulk_mark", entity: "AttendanceRecord", after: { count: employees.length, status: input.status, date: dayKey(date) }, req });
+    return { count: employees.length };
+  },
+
   /** CSV export of a month for the caller's scope. */
   async exportCsv(req: Request, month: number, year: number, orgWide: boolean): Promise<string> {
     const where: Prisma.EmployeeWhereInput = {
@@ -533,6 +563,81 @@ export const attendanceService = {
           Math.round((summary.workMinutes / 60) * 10) / 10,
         ].map(esc).join(",")
       );
+    }
+    return lines.join("\r\n");
+  },
+
+  /** Attendance report data: monthly (one month) or yearly (12 months). */
+  async report(req: Request, year: number, month: number | undefined, departmentId: string | undefined, orgWide: boolean) {
+    const where: Prisma.EmployeeWhereInput = {
+      deletedAt: null,
+      status: { in: ["ONBOARDING", "PROBATION", "ACTIVE"] },
+      ...(departmentId ? { departmentId } : {}),
+    };
+    if (!orgWide && req.user?.employeeId) where.managerId = req.user.employeeId;
+
+    const employees = await prisma.employee.findMany({
+      where,
+      select: { id: true, employeeCode: true, firstName: true, lastName: true, department: { select: { name: true } } },
+      orderBy: { employeeCode: "asc" },
+      take: 1000,
+    });
+
+    const months = month ? [month] : Array.from({ length: 12 }, (_, i) => i + 1);
+    const rows = [];
+    for (const emp of employees) {
+      const monthlyData: Record<string, { present: number; absent: number; halfDay: number; onLeave: number; late: number; workMinutes: number; workingDays: number }> = {};
+      let totals = { present: 0, absent: 0, halfDay: 0, onLeave: 0, late: 0, workMinutes: 0, workingDays: 0 };
+      for (const m of months) {
+        const { summary } = await this.monthFor(emp.id, m, year);
+        monthlyData[String(m)] = summary;
+        totals.present += summary.present;
+        totals.absent += summary.absent;
+        totals.halfDay += summary.halfDay;
+        totals.onLeave += summary.onLeave;
+        totals.late += summary.late;
+        totals.workMinutes += summary.workMinutes;
+        totals.workingDays += summary.workingDays;
+      }
+      rows.push({
+        employee: { id: emp.id, employeeCode: emp.employeeCode, name: `${emp.firstName} ${emp.lastName}`, department: emp.department?.name ?? "" },
+        monthly: monthlyData,
+        totals,
+      });
+    }
+    return { year, months, rows };
+  },
+
+  /** CSV export — if month is given export that month, else export the full year. */
+  async exportReportCsv(req: Request, year: number, month: number | undefined, departmentId: string | undefined, orgWide: boolean): Promise<string> {
+    const report = await this.report(req, year, month, departmentId, orgWide);
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    if (month) {
+      const lines = [
+        ["Code", "Name", "Department", "Working Days", "Present", "Half Days", "On Leave", "Absent", "Late", "Hours"].map(esc).join(","),
+      ];
+      for (const row of report.rows) {
+        const s = row.totals;
+        lines.push([row.employee.employeeCode, row.employee.name, row.employee.department, s.workingDays, s.present, s.halfDay, s.onLeave, s.absent, s.late, Math.round((s.workMinutes / 60) * 10) / 10].map(esc).join(","));
+      }
+      return lines.join("\r\n");
+    }
+
+    const header = ["Code", "Name", "Department"];
+    for (const m of report.months) header.push(`${MONTH_NAMES[m]} Present`, `${MONTH_NAMES[m]} Absent`, `${MONTH_NAMES[m]} Leave`);
+    header.push("Total Present", "Total Absent", "Total Leave", "Total Hours");
+    const lines = [header.map(esc).join(",")];
+    for (const row of report.rows) {
+      const cells: (string | number)[] = [row.employee.employeeCode, row.employee.name, row.employee.department];
+      for (const m of report.months) {
+        const s = row.monthly[String(m)]!;
+        cells.push(s.present, s.absent, s.onLeave);
+      }
+      const t = row.totals;
+      cells.push(t.present, t.absent, t.onLeave, Math.round((t.workMinutes / 60) * 10) / 10);
+      lines.push(cells.map(esc).join(","));
     }
     return lines.join("\r\n");
   },

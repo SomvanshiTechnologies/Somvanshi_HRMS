@@ -4,8 +4,9 @@ import { BadRequestError, ForbiddenError, NotFoundError } from "../../core/error
 import { audit } from "../audit/audit.service.js";
 import { notify, notifyMany } from "../notifications/notifications.service.js";
 import { mailService } from "../notifications/mail.service.js";
-import type { ApplyLeaveInput, WorkflowStep } from "./leave.schema.js";
-import type { LeaveUnit, Prisma } from "../../generated/prisma/client.js";
+import type { ApplyLeaveInput, LeavePolicyInput, LeaveTypeInput, WorkflowStep } from "./leave.schema.js";
+import { Prisma } from "../../generated/prisma/client.js";
+import type { LeaveUnit } from "../../generated/prisma/client.js";
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -136,6 +137,72 @@ export const leaveService = {
     });
   },
 
+  /* ---------- policy builder (HR/admin, DB-driven) ---------- */
+
+  /** All leave types incl. inactive, with all their policies — for the builder UI. */
+  async listAllTypes() {
+    return prisma.leaveType.findMany({ orderBy: { name: "asc" }, include: { policies: { orderBy: { createdAt: "asc" } } } });
+  },
+
+  async createType(req: Request, input: LeaveTypeInput) {
+    const type = await prisma.leaveType.create({ data: input });
+    audit({ action: "leave.type_create", entity: "LeaveType", entityId: type.id, after: type, req });
+    return type;
+  },
+
+  async updateType(req: Request, id: string, input: LeaveTypeInput) {
+    const before = await prisma.leaveType.findUnique({ where: { id } });
+    if (!before) throw new NotFoundError("Leave type");
+    const type = await prisma.leaveType.update({ where: { id }, data: input });
+    audit({ action: "leave.type_update", entity: "LeaveType", entityId: id, before, after: type, req });
+    return type;
+  },
+
+  async createPolicy(req: Request, input: LeavePolicyInput) {
+    const policy = await prisma.leavePolicy.create({ data: this.policyData(input) });
+    audit({ action: "leave.policy_create", entity: "LeavePolicy", entityId: policy.id, after: policy, req });
+    return policy;
+  },
+
+  async updatePolicy(req: Request, id: string, input: LeavePolicyInput) {
+    const before = await prisma.leavePolicy.findUnique({ where: { id } });
+    if (!before) throw new NotFoundError("Leave policy");
+    const policy = await prisma.leavePolicy.update({ where: { id }, data: this.policyData(input) });
+    audit({ action: "leave.policy_update", entity: "LeavePolicy", entityId: id, before, after: policy, req });
+    return policy;
+  },
+
+  async deletePolicy(req: Request, id: string) {
+    const before = await prisma.leavePolicy.findUnique({ where: { id } });
+    if (!before) throw new NotFoundError("Leave policy");
+    await prisma.leavePolicy.delete({ where: { id } });
+    audit({ action: "leave.policy_delete", entity: "LeavePolicy", entityId: id, before, req });
+  },
+
+  /** Map a validated policy input to Prisma data (JSON / nullable handling). */
+  policyData(input: LeavePolicyInput): Prisma.LeavePolicyUncheckedCreateInput {
+    return {
+      leaveTypeId: input.leaveTypeId,
+      name: input.name,
+      annualQuota: input.annualQuota,
+      accrualFrequency: input.accrualFrequency,
+      maxCarryForward: input.maxCarryForward,
+      carryForwardExpiryMonths: input.carryForwardExpiryMonths ?? null,
+      maxConsecutiveDays: input.maxConsecutiveDays ?? null,
+      minServiceDays: input.minServiceDays,
+      noticeDays: input.noticeDays,
+      allowHalfDay: input.allowHalfDay,
+      requiresDocument: input.requiresDocument,
+      genderRestriction: input.genderRestriction ?? null,
+      departmentIds: input.departmentIds && input.departmentIds.length ? (input.departmentIds as object) : Prisma.DbNull,
+      maxNegativeBalance: input.maxNegativeBalance,
+      encashable: input.encashable,
+      maxEncashmentDays: input.maxEncashmentDays,
+      approvalWorkflow: input.approvalWorkflow && input.approvalWorkflow.length ? (input.approvalWorkflow as object) : Prisma.DbNull,
+      isActive: input.isActive,
+    };
+  },
+
   async myBalances(req: Request, year = new Date().getFullYear()) {
     const employee = await requireEmployee(req);
     const types = await prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { name: "asc" } });
@@ -168,6 +235,12 @@ export const leaveService = {
     const policy = await prisma.leavePolicy.findFirst({ where: { leaveTypeId: leaveType.id, isActive: true } });
     if (policy?.genderRestriction && policy.genderRestriction !== employee.gender) {
       throw new BadRequestError(`${leaveType.name} is not applicable to your profile`);
+    }
+    if (policy?.minServiceMonths && employee.dateOfJoining) {
+      const monthsServed = Math.floor((Date.now() - new Date(employee.dateOfJoining).getTime()) / (30.44 * 86400000));
+      if (monthsServed < policy.minServiceMonths) {
+        throw new BadRequestError(`${leaveType.name} requires at least ${policy.minServiceMonths} months of service`);
+      }
     }
     if (policy?.requiresDocument && !input.documentUrl) {
       throw new BadRequestError(`${leaveType.name} requires a supporting document`);

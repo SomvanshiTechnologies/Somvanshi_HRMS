@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import logoUrl from "@/assets/brand/logo_STech.jpg";
+const logoUrl = "/logo-dark.png";
 
 const inr = (v: number) => formatINR(v);
 
@@ -51,7 +51,10 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
   const detail = usePayslipDetail(id);
   const email = useEmailPayslip();
   const [showBreakdown, setShowBreakdown] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState<"auto" | "pdf" | "detail">("auto");
   const d = detail.data;
+  const isImported = d?.source === "IMPORTED";
+  const effectiveMode = viewMode === "auto" ? (isImported ? "pdf" : "detail") : viewMode;
   // only show line items / sections that actually carry a value
   const earnings = (d?.earnings ?? []).filter((e) => e.amount !== 0);
   const deductions = (d?.deductions ?? []).filter((e) => e.amount !== 0);
@@ -67,7 +70,7 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
             {/* header */}
             <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-5 py-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="rounded-lg bg-white p-1.5 shadow-sm shrink-0"><img src={logoUrl} alt="Somvanshi" className="h-6 w-auto" /></div>
+                <img src={logoUrl} alt="Somvanshi" className="h-12 w-auto shrink-0" />
                 <div className="min-w-0">
                   <p className="font-semibold text-text truncate">{d.company.name}</p>
                   <p className="text-xs text-text-muted">{d.payslipNo ? <span className="font-mono">{d.payslipNo}</span> : "Payslip"} · {d.period.label}</p>
@@ -81,12 +84,22 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
 
             {/* actions */}
             <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-sunken px-5 py-2 shrink-0">
-              <Button size="sm" variant="secondary" onClick={() => openPayslipPdf(d.id).catch((e) => toast.error(apiErrorMessage(e)))}><FileText className="size-3.5" /> PDF</Button>
+              <Button size="sm" variant={effectiveMode === "pdf" ? "primary" : "secondary"} onClick={() => setViewMode("pdf")}><FileText className="size-3.5" /> PDF View</Button>
+              <Button size="sm" variant={effectiveMode === "detail" ? "primary" : "secondary"} onClick={() => setViewMode("detail")}><Banknote className="size-3.5" /> Detail View</Button>
+              <Button size="sm" variant="secondary" onClick={() => openPayslipPdf(d.id).catch((e) => toast.error(apiErrorMessage(e)))}><Download className="size-3.5" /> Download</Button>
               <Button size="sm" variant="secondary" onClick={() => downloadPayslipCsv(d)}><FileSpreadsheet className="size-3.5" /> Excel</Button>
-              <Button size="sm" variant="secondary" loading={email.isPending} onClick={() => email.mutate(d.id)}><Mail className="size-3.5" /> Email to me</Button>
             </div>
 
             {/* body */}
+            {effectiveMode === "pdf" ? (
+              <div className="flex-1 min-h-0 bg-surface-sunken">
+                <iframe
+                  src={`/api/v1/payroll/payslips/${d.id}/pdf`}
+                  className="w-full h-full min-h-[70vh] border-0"
+                  title="Payslip PDF"
+                />
+              </div>
+            ) : (
             <div className="overflow-y-auto scrollbar-thin p-5 space-y-5 bg-surface-sunken">
               {/* employee summary */}
               <Card className="rounded-xl p-4">
@@ -202,6 +215,7 @@ export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () 
 
               <p className="text-[11px] text-text-faint text-center pb-1">This is a system-generated payslip from Somvanshi HRMS and does not require a signature.</p>
             </div>
+            )}
           </>
         )}
       </DialogContent>

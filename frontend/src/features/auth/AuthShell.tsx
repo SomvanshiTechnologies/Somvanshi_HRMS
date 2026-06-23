@@ -3,9 +3,9 @@ import { CompanyLogo } from "@/components/brand";
 /** Split-screen auth layout: brand panel + form card. */
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2 bg-bg">
+    <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr] bg-bg">
       {/* brand panel */}
-      <div className="relative hidden lg:flex flex-col justify-between bg-secondary p-12 overflow-hidden">
+      <div className="relative hidden lg:flex flex-col justify-between bg-secondary overflow-hidden">
         <div
           className="absolute inset-0 opacity-20"
           style={{
@@ -14,25 +14,31 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           }}
           aria-hidden
         />
-        <div className="relative z-10 overflow-hidden rounded-xl bg-white shadow-sm w-fit">
-          <CompanyLogo className="h-20" />
+
+        <div className="relative z-10 flex w-full flex-col justify-between p-12 text-white h-full">
+          <div className="flex flex-col items-start gap-1.5">
+            <img src="/logo-dark.png" alt="Somvanshi Technologies" className="h-14 w-auto object-contain object-left -ml-2" />
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white">Somvanshi HRMS</span>
+          </div>
+
+          <div className="max-w-lg">
+            <h2 className="text-4xl font-bold leading-tight tracking-tight">
+              People. <span className="text-(--chart-3)">Performance.</span><br />Growth.
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-white/80">
+              Somvanshi HRMS is Somvanshi Technologies' enterprise people platform — one workspace
+              for the entire employee lifecycle: hire, onboard, manage, pay, grow.
+            </p>
+          </div>
+
+          <div className="text-xs text-white/60">
+            © {new Date().getFullYear()} Somvanshi Technologies. All rights reserved.
+          </div>
         </div>
-        <div className="relative z-10 max-w-md">
-          <h1 className="text-4xl font-semibold text-white leading-tight tracking-tight">
-            People. <span className="text-(--chart-3)">Performance.</span> Growth.
-          </h1>
-          <p className="mt-4 text-slate-300 leading-relaxed">
-            Somvanshi HRMS is Somvanshi Technologies' enterprise people platform — one workspace
-            for the entire employee lifecycle: hire, onboard, manage, pay, grow.
-          </p>
-        </div>
-        <p className="relative z-10 text-xs text-slate-400">
-          © {new Date().getFullYear()} Somvanshi Technologies. All rights reserved.
-        </p>
       </div>
 
       {/* form panel */}
-      <div className="flex items-center justify-center p-6">
+      <div className="flex items-center justify-center p-6 lg:p-10">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden flex justify-center">
             <CompanyLogo />

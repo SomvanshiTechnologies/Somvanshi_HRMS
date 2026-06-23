@@ -207,6 +207,30 @@ enum PayslipStatus {
   ON_HOLD
 }
 
+/// How a payslip came to exist: produced by the payroll engine, or imported
+/// from a pre-HRMS system / earlier month.
+enum PayslipSource {
+  SYSTEM_GENERATED
+  IMPORTED
+}
+
+/// Disbursement status of a payslip's net pay.
+enum PaymentStatus {
+  PENDING
+  INITIATED
+  PAID
+  FAILED
+}
+
+/// Lifecycle of a bulk import batch (the reusable Import Engine).
+enum ImportStatus {
+  PREVIEW // validated, not yet committed
+  COMPLETED // all rows applied
+  PARTIAL // some rows applied, some failed
+  FAILED // nothing applied
+  ROLLED_BACK // a committed batch was undone
+}
+
 enum GoalStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -378,6 +402,7 @@ model User {
 
   employee            Employee?
   roles               UserRole[]
+  permissionOverrides UserPermission[]
   refreshTokens       RefreshToken[]
   sessions            Session[]
   devices             Device[]
@@ -445,6 +470,22 @@ model UserRole {
 
   @@id([userId, roleId])
   @@map("user_roles")
+}
+
+/// Per-user permission overrides layered on top of role permissions.
+/// effect=GRANT adds a permission; effect=DENY removes one a role would otherwise give.
+model UserPermission {
+  userId         String
+  permissionCode String // matches Permission.code
+  effect         String   @default("GRANT") // GRANT | DENY
+  assignedBy     String?
+  assignedAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionCode])
+  @@index([userId])
+  @@map("user_permissions")
 }
 
 model RefreshToken {
@@ -1342,6 +1383,7 @@ model AttendanceRecord {
   isLate      Boolean          @default(false)
   isEarlyOut  Boolean          @default(false)
   remarks     String?
+  importBatchId String? // set when the record was created by an Excel import (enables rollback)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -1352,6 +1394,7 @@ model AttendanceRecord {
   @@unique([employeeId, date])
   @@index([date])
   @@index([status])
+  @@index([importBatchId])
   @@map("attendance_records")
 }
 
@@ -1438,12 +1481,18 @@ model LeavePolicy {
   annualQuota        Float            @default(0)
   accrualFrequency   AccrualFrequency @default(YEARLY)
   maxCarryForward    Float            @default(0)
+  carryForwardExpiryMonths Int? // carried-over days expire after N months into the new year (null = never)
   maxConsecutiveDays Int?
   minServiceDays     Int              @default(0)
   noticeDays         Int              @default(0)
   allowHalfDay       Boolean          @default(true)
   requiresDocument   Boolean          @default(false) // e.g. medical certificate
   genderRestriction  Gender?
+  departmentIds      Json? // null/empty = all departments; else array of department ids
+  maxNegativeBalance Float            @default(0) // how far below zero a balance may go (0 = none)
+  encashable         Boolean          @default(false)
+  maxEncashmentDays  Float            @default(0)
+  approvalWorkflow   Json? // optional per-policy approval chain; null = use global WorkflowConfig
   isActive           Boolean          @default(true)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
@@ -1464,6 +1513,7 @@ model LeaveBalance {
   used        Float    @default(0)
   pending     Float    @default(0) // booked but not yet taken/approved
   carriedOver Float    @default(0)
+  importBatchId String? // set when (re)created via Excel import
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
 
@@ -1471,6 +1521,7 @@ model LeaveBalance {
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
 
   @@unique([employeeId, leaveTypeId, year])
+  @@index([importBatchId])
   @@map("leave_balances")
 }
 
@@ -1491,6 +1542,7 @@ model LeaveRequest {
   approverId  String? // final decider (back-compat / quick lookups)
   actedAt     DateTime?
   approverRemarks String?
+  importBatchId String? // set when created via historical Excel import
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
@@ -1501,6 +1553,7 @@ model LeaveRequest {
 
   @@index([employeeId, startDate])
   @@index([status])
+  @@index([importBatchId])
   @@map("leave_requests")
 }
 
@@ -1583,6 +1636,7 @@ model SalaryComponent {
   formula         String? // when FORMULA
   isTaxable       Boolean         @default(true)
   isStatutory     Boolean         @default(false) // PF/PT/ESI/TDS
+  isReimbursement Boolean         @default(false) // reimbursement category (travel, internet, …)
   isActive        Boolean         @default(true)
   displayOrder    Int             @default(1)
   createdAt       DateTime        @default(now())
@@ -1703,7 +1757,7 @@ model PayrollRun {
 model Payslip {
   id            String        @id @default(cuid())
   payslipNo     String?       @unique // auto-generated: ST/YYYY/PXXX (running, per-year)
-  runId         String
+  runId         String? // null for imported (pre-HRMS) payslips — they belong to no payroll run
   employeeId    String
   month         Int
   year          Int
@@ -1714,17 +1768,39 @@ model Payslip {
   totalDeductions Decimal     @db.Decimal(14, 2)
   netPay        Decimal       @db.Decimal(14, 2)
   status        PayslipStatus @default(GENERATED)
+  source        PayslipSource @default(SYSTEM_GENERATED)
   pdfUrl        String?
   publishedAt   DateTime?
+  // attendance breakdown
+  holidays      Float         @default(0)
+  weekOffs      Float         @default(0)
+  overtimeHours Float         @default(0)
+  // payment information
+  transactionId  String?
+  paymentRef     String?
+  paymentDate    DateTime?
+  bankName       String?
+  paymentStatus  PaymentStatus @default(PENDING)
+  // notes
+  remarks      String?        @db.Text
+  payrollNotes String?        @db.Text
+  hrNotes      String?        @db.Text // internal — never shown on the payslip
+  // edit provenance
+  editedBy     String?
+  editedAt     DateTime?
+  // import provenance (when source = IMPORTED)
+  importBatchId  String?
+  sourceFileName String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  run      PayrollRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  run      PayrollRun?   @relation(fields: [runId], references: [id], onDelete: Cascade)
   employee Employee      @relation(fields: [employeeId], references: [id])
   lines    PayslipLine[]
 
   @@unique([employeeId, month, year])
   @@index([runId])
+  @@index([importBatchId])
   @@map("payslips")
 }
 
@@ -1742,6 +1818,67 @@ model PayslipLine {
 
   @@index([payslipId])
   @@map("payslip_lines")
+}
+
+/// Company-configurable statutory payroll rules (single active row). Replaces the
+/// previously hardcoded constants in payroll.calc.ts so HR can tune PF/ESI/PT/TDS.
+model PayrollStatutoryConfig {
+  id                 String  @id @default(cuid())
+  // structure
+  flatStructure      Boolean @default(true) // true = whole gross as Basic; false = split Basic/HRA/SA
+  basicPercentOfCtc  Float   @default(50)
+  hraPercentOfBasic  Float   @default(50)
+  // master toggle for statutory deductions
+  statutoryEnabled   Boolean @default(false)
+  // Provident Fund
+  pfEnabled          Boolean @default(true)
+  pfRate             Float   @default(12) // % of basic
+  pfWageCap          Float   @default(15000) // basic capped at this for PF
+  // ESI
+  esiEnabled         Boolean @default(true)
+  esiRate            Float   @default(0.75) // % of gross
+  esiGrossThreshold  Float   @default(21000) // applies only if gross <= this
+  // Professional Tax
+  ptEnabled          Boolean @default(true)
+  ptAmount           Float   @default(200) // flat per month
+  ptGrossThreshold   Float   @default(7500) // applies only if gross > this
+  // TDS
+  tdsEnabled         Boolean @default(true)
+  tdsStandardDeduction Float @default(75000)
+  tdsRebateLimit     Float   @default(1200000) // taxable income with zero tax (87A)
+  tdsCessRate        Float   @default(4) // % health & education cess
+  tdsSlabs           Json? // [[from, to, rate], …]; null = built-in new-regime slabs
+  isActive           Boolean @default(true)
+  updatedBy          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("payroll_statutory_config")
+}
+
+// =====================================================================
+// IMPORT ENGINE — one reusable batch log across all bulk Excel imports
+// (attendance, leave balances/transactions, payslips, future modules).
+// =====================================================================
+
+model ImportBatch {
+  id            String       @id @default(cuid())
+  type          String // "attendance" | "leave_balance" | "leave_txn" | "payslip" | ...
+  fileName      String
+  status        ImportStatus @default(COMPLETED)
+  totalRows     Int          @default(0)
+  successCount  Int          @default(0)
+  failureCount  Int          @default(0)
+  errors        Json? // [{ row, employeeCode?, messages: string[] }]
+  summary       Json? // importer-specific roll-up shown in history
+  importedBy    String // userId who ran the import
+  importedByName String? // denormalised for history display
+  rolledBackAt  DateTime?
+  createdAt     DateTime     @default(now())
+
+  @@index([type])
+  @@index([importedBy])
+  @@map("import_batches")
 }
 
 // =====================================================================

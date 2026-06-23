@@ -30,6 +30,7 @@ export interface PayslipRow {
   totalDeductions: string;
   netPay: string;
   status: string;
+  source?: string;
   publishedAt: string | null;
   lines?: Array<{ id: string; type: string; label: string; amount: string }>;
   employee?: { id: string; employeeCode: string; firstName: string; lastName: string; photoUrl: string | null; department: { name: string } | null };
@@ -62,6 +63,12 @@ export const useRevisions = () =>
 export const useMyPayslips = () =>
   useQuery({ queryKey: ["payroll", "payslips", "me"], queryFn: () => get<PayslipRow[]>("/payroll/payslips/me") });
 
+export const useAllPayslips = (year?: number, month?: number) =>
+  useQuery({
+    queryKey: ["payroll", "payslips", "all", year, month],
+    queryFn: () => get<PayslipRow[]>("/payroll/payslips/all", { ...(year ? { year } : {}), ...(month ? { month } : {}) }),
+  });
+
 export interface PayslipLineItem { label: string; code: string; amount: number }
 export interface PayslipDetail {
   id: string;
@@ -69,6 +76,7 @@ export interface PayslipDetail {
   generatedOn: string | null;
   period: { month: number; year: number; label: string };
   status: string;
+  source: string;
   payment: { status: string; paidAt: string | null; processedAt: string | null; utr: string | null };
   company: { name: string };
   employee: { id: string; name: string; code: string; photoUrl: string | null; designation: string | null; department: string | null; location: string | null; dateOfJoining: string | null; employmentType: string };
@@ -83,6 +91,71 @@ export interface PayslipDetail {
 
 export const usePayslipDetail = (id: string | null) =>
   useQuery({ queryKey: ["payroll", "payslip", id], queryFn: () => get<PayslipDetail>(`/payroll/payslips/${id}`), enabled: Boolean(id) });
+
+export function useImportSinglePayslip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { employeeId: string; month: number; year: number; netPay?: number; grossEarnings?: number; totalDeductions?: number; file: File }) => {
+      const form = new FormData();
+      form.append("file", input.file);
+      form.append("employeeId", input.employeeId);
+      form.append("month", String(input.month));
+      form.append("year", String(input.year));
+      if (input.netPay != null) form.append("netPay", String(input.netPay));
+      if (input.grossEarnings != null) form.append("grossEarnings", String(input.grossEarnings));
+      if (input.totalDeductions != null) form.append("totalDeductions", String(input.totalDeductions));
+      return api.post("/payroll/payslips/import-single", form, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    onSuccess: () => {
+      toast.success("Payslip imported.");
+      void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+      void queryClient.invalidateQueries({ queryKey: ["imports"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
+export function useReplacePayslipPdf() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", input.file);
+      return api.put(`/payroll/payslips/${input.id}/pdf`, form, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    onSuccess: () => {
+      toast.success("Payslip PDF replaced.");
+      void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
+export function useUpdatePayslip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; data: Record<string, unknown> }) =>
+      api.patch(`/payroll/payslips/${input.id}`, input.data),
+    onSuccess: () => {
+      toast.success("Payslip updated.");
+      void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
+export function useCreateManualPayslip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) => api.post("/payroll/payslips/manual", input),
+    onSuccess: () => {
+      toast.success("Payslip created.");
+      void queryClient.invalidateQueries({ queryKey: ["payroll"] });
+      void queryClient.invalidateQueries({ queryKey: ["imports"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
 
 export function useEmailPayslip() {
   return useMutation({

@@ -9,6 +9,7 @@ import { PERMISSIONS } from "../../shared/permissions.js";
 import { ok, created } from "../../core/http.js";
 import {
   AssignShiftSchema,
+  BulkMarkSchema,
   CorrectionDecisionSchema,
   CorrectionRequestSchema,
   CreateShiftSchema,
@@ -16,8 +17,10 @@ import {
   ManualMarkSchema,
   MonthQuerySchema,
   PunchSchema,
+  ReportQuerySchema,
   type DayQuery,
   type MonthQuery,
+  type ReportQuery,
 } from "./attendance.schema.js";
 
 export const attendanceRouter: Router = Router();
@@ -85,17 +88,37 @@ attendanceRouter.get(
 );
 
 attendanceRouter.post("/manual", requirePermission(PERMISSIONS.ATTENDANCE_MANAGE), validate({ body: ManualMarkSchema }), asyncHandler(async (req: Request, res: Response) => void ok(res, await attendanceService.manualMark(req, req.body), "Attendance marked.")));
+attendanceRouter.post("/manual/bulk", requirePermission(PERMISSIONS.ATTENDANCE_MANAGE), validate({ body: BulkMarkSchema }), asyncHandler(async (req: Request, res: Response) => void ok(res, await attendanceService.bulkMark(req, req.body), "Attendance updated.")));
+attendanceRouter.delete(
+  "/record/:employeeId/:date",
+  requirePermission(PERMISSIONS.ATTENDANCE_MANAGE),
+  asyncHandler(async (req: Request, res: Response) => {
+    const date = new Date(req.params["date"] as string);
+    ok(res, await attendanceService.deleteRecord(req, req.params["employeeId"] as string, date), "Attendance record deleted.");
+  })
+);
+
+attendanceRouter.get(
+  "/report",
+  requirePermission(PERMISSIONS.ATTENDANCE_READ_ALL),
+  validate({ query: ReportQuerySchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const q = getQuery<ReportQuery>(res);
+    ok(res, await attendanceService.report(req, q.year, q.month, q.departmentId, isOrgWide(req)));
+  })
+);
 
 attendanceRouter.get(
   "/export",
   requirePermission(PERMISSIONS.ATTENDANCE_EXPORT),
-  validate({ query: MonthQuerySchema }),
+  validate({ query: ReportQuerySchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const q = getQuery<MonthQuery>(res);
-    const csv = await attendanceService.exportCsv(req, q.month, q.year, isOrgWide(req));
+    const q = getQuery<ReportQuery>(res);
+    const csv = await attendanceService.exportReportCsv(req, q.year, q.month, q.departmentId, isOrgWide(req));
+    const tag = q.month ? `${q.year}-${String(q.month).padStart(2, "0")}` : `${q.year}`;
     res
       .header("Content-Type", "text/csv; charset=utf-8")
-      .header("Content-Disposition", `attachment; filename="somhr-attendance-${q.year}-${String(q.month).padStart(2, "0")}.csv"`)
+      .header("Content-Disposition", `attachment; filename="somhr-attendance-${tag}.csv"`)
       .send(csv);
   })
 );

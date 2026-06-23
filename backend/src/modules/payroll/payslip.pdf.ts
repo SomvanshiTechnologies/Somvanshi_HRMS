@@ -2,7 +2,7 @@
 import path from "node:path";
 import { assetBuffer, bundledAsset } from "../files/storage.js";
 
-const LOGO_PATH = path.resolve(process.cwd(), "assets/logo_STech.jpg");
+const LOGO_PATH = path.resolve(process.cwd(), "../frontend/public/logo-dark.png");
 
 export interface PayslipPdfData {
   company: {
@@ -81,19 +81,17 @@ export async function renderPayslipPdf(data: PayslipPdfData): Promise<Buffer> {
     doc.rect(0, 0, doc.page.width, bandH).fill(NAVY);
     doc.rect(0, bandH, doc.page.width, 4).fill(LIGHT); // accent rule
 
-    // brand logo on a white chip (admin-uploaded branding logo wins, else bundled, else text-only)
     let hasLogo = false;
     try {
       if (logoBuf) {
-        doc.roundedRect(LX, 22, 54, 54, 8).fill("#ffffff");
-        doc.image(logoBuf, LX + 6, 28, { fit: [42, 42], align: "center", valign: "center" });
+        doc.image(logoBuf, LX, 20, { fit: [80, 60], align: "center", valign: "center" });
         hasLogo = true;
       }
     } catch {
       hasLogo = false;
     }
 
-    const textX = hasLogo ? LX + 70 : LX;
+    const textX = hasLogo ? LX + 88 : LX;
     doc.fill("#ffffff").font("Helvetica-Bold").fontSize(17).text(data.company.name.toUpperCase(), textX, 26, { width: 320 });
     doc.font("Helvetica-Oblique").fontSize(8.5).fillColor("#9fc4e0")
       .text(data.company.tagline ?? "Intelligent Digital Transformation", textX, 47, { width: 320 });

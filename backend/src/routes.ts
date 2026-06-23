@@ -27,6 +27,7 @@ import { settingsRouter } from "./modules/settings/settings.routes.js";
 import { brandingRouter } from "./modules/branding/branding.routes.js";
 import { eodRouter } from "./modules/eod/eod.routes.js";
 import { aiRouter } from "./modules/ai/ai.routes.js";
+import { importsRouter } from "./modules/imports/import.routes.js";
 import { apiLimiter } from "./middleware/rateLimit.middleware.js";
 
 /**
@@ -76,3 +77,4 @@ apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/branding", brandingRouter);
 apiRouter.use("/eod", eodRouter);
 apiRouter.use("/ai", aiRouter);
+apiRouter.use("/imports", importsRouter);

@@ -230,6 +230,23 @@ export const employeesService = {
         );
     }
     audit({ action: "employee.create", entity: "Employee", entityId: employee.id, after: employee, req });
+
+    // Auto new-joiner announcement in company feed
+    try {
+      const dept = employee.departmentId ? await prisma.department.findUnique({ where: { id: employee.departmentId }, select: { name: true } }) : null;
+      const desig = employee.designationId ? await prisma.designation.findUnique({ where: { id: employee.designationId }, select: { title: true } }) : null;
+      const role = desig?.title ?? "the team";
+      await prisma.announcementPost.create({
+        data: {
+          authorEmployeeId: req?.user?.employeeId ?? employee.id,
+          title: `Welcome ${employee.firstName} ${employee.lastName}!`,
+          body: `Please join us in welcoming **${employee.firstName} ${employee.lastName}** to ${dept?.name ?? "the company"} as ${role}. ${employee.dateOfJoining ? `Joining date: ${employee.dateOfJoining.toISOString().slice(0, 10)}.` : ""}`,
+          category: "CELEBRATION",
+          isPinned: false,
+        },
+      });
+    } catch { /* non-blocking */ }
+
     return employee;
   },
 

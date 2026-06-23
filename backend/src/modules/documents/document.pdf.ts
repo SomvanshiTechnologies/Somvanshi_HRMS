@@ -6,7 +6,7 @@ const NAVY = "#0a3d62";
 const LIGHT = "#63b0cd";
 const SLATE = "#64748b";
 const BORDER = "#e2e8f0";
-const BUNDLED_LOGO = path.resolve(process.cwd(), "assets/logo_STech.jpg");
+const BUNDLED_LOGO = path.resolve(process.cwd(), "../frontend/public/logo-dark.png");
 
 export interface DocumentPdfInput {
   company: { name: string; address: string | null; email: string | null; phone: string | null; website: string | null; tagline: string };

@@ -78,10 +78,10 @@ export function LoginPage() {
           </Button>
         </form>
       ) : (
-        <form onSubmit={onLogin} className="space-y-5" noValidate>
+        <form onSubmit={onLogin} className="space-y-6" noValidate>
           <div>
-            <h2 className="text-xl font-semibold text-text">Sign in to Somvanshi HRMS</h2>
-            <p className="mt-1 text-sm text-text-muted">Use your Somvanshi Technologies work account.</p>
+            <h2 className="text-2xl font-bold text-[#1a1a2e]">Sign in to Somvanshi HRMS</h2>
+            <p className="mt-1.5 text-sm text-[#6b7280]">Use your Somvanshi Technologies work account.</p>
           </div>
 
           {params.get("expired") && (
@@ -113,15 +113,13 @@ export function LoginPage() {
             />
           </FormField>
 
-          <div className="flex justify-end">
-            <Link to="/forgot-password" className="text-sm text-primary hover:underline dark:text-chart-3">
-              Forgot password?
-            </Link>
-          </div>
-
-          <Button type="submit" className="w-full" size="lg" loading={login.isPending}>
+          <Button type="submit" className="w-full bg-[#1978B8] hover:bg-[#146a9e]" size="lg" loading={login.isPending}>
             Sign in
           </Button>
+
+          <p className="text-[13px] text-[#a0aec0]">
+            Trouble signing in? Contact your HR administrator to reset your password.
+          </p>
         </form>
       )}
     </AuthShell>

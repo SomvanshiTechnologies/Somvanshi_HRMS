@@ -199,6 +199,82 @@ export function useRemoveHoliday() {
   });
 }
 
+// ---- policy builder (DB-driven) ----
+
+export interface AdminLeavePolicy {
+  id: string;
+  leaveTypeId: string;
+  name: string;
+  annualQuota: number;
+  accrualFrequency: "MONTHLY" | "QUARTERLY" | "YEARLY" | "NONE";
+  maxCarryForward: number;
+  carryForwardExpiryMonths: number | null;
+  maxConsecutiveDays: number | null;
+  minServiceDays: number;
+  noticeDays: number;
+  allowHalfDay: boolean;
+  requiresDocument: boolean;
+  genderRestriction: "MALE" | "FEMALE" | "OTHER" | "UNDISCLOSED" | null;
+  departmentIds: string[] | null;
+  maxNegativeBalance: number;
+  encashable: boolean;
+  maxEncashmentDays: number;
+  approvalWorkflow: WorkflowStep[] | null;
+  isActive: boolean;
+}
+
+export interface AdminLeaveType {
+  id: string;
+  name: string;
+  code: string;
+  isPaid: boolean;
+  colorHex: string;
+  description: string | null;
+  isActive: boolean;
+  policies: AdminLeavePolicy[];
+}
+
+export const useAllLeaveTypes = (enabled: boolean) =>
+  useQuery({ queryKey: ["leave", "admin", "types"], queryFn: () => get<AdminLeaveType[]>("/leave/admin/types"), enabled });
+
+export function useSaveLeaveType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id?: string } & Record<string, unknown>) =>
+      input.id ? api.put(`/leave/admin/types/${input.id}`, input) : api.post("/leave/admin/types", input),
+    onSuccess: () => {
+      toast.success("Leave type saved.");
+      void queryClient.invalidateQueries({ queryKey: ["leave"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
+export function useSaveLeavePolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id?: string } & Record<string, unknown>) =>
+      input.id ? api.put(`/leave/admin/policies/${input.id}`, input) : api.post("/leave/admin/policies", input),
+    onSuccess: () => {
+      toast.success("Policy saved.");
+      void queryClient.invalidateQueries({ queryKey: ["leave"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
+export function useDeleteLeavePolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/leave/admin/policies/${id}`),
+    onSuccess: () => {
+      toast.success("Policy deleted.");
+      void queryClient.invalidateQueries({ queryKey: ["leave"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  });
+}
+
 // ---- workflow config ----
 
 export interface WorkflowStep {

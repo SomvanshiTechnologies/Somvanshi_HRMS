@@ -1,12 +1,11 @@
 import * as React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Sparkles, User, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   SUGGESTED_PROMPTS, useConversationMessages, useStreamChat, type ChatMessage,
 } from "./useSomAI";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function Markdown({ text }: { text: string }) {
@@ -17,18 +16,32 @@ function Markdown({ text }: { text: string }) {
   );
 }
 
+function SeraAvatar({ size = "sm" }: { size?: "sm" | "md" }) {
+  const s = size === "md" ? "size-10" : "size-7";
+  const icon = size === "md" ? "text-base" : "text-xs";
+  return (
+    <div className={cn("shrink-0 flex items-center justify-center rounded-lg bg-gradient-to-br from-[#0d1117] to-[#1c2333] text-white font-bold", s)}>
+      <span className={icon}>S</span>
+    </div>
+  );
+}
+
+function UserAvatar() {
+  return (
+    <div className="shrink-0 flex items-center justify-center size-7 rounded-lg bg-[#e8eaed] text-[#5f6368] font-semibold text-xs">
+      U
+    </div>
+  );
+}
+
 function Bubble({ role, children }: { role: "USER" | "ASSISTANT"; children: React.ReactNode }) {
   const isUser = role === "USER";
   return (
     <div className={cn("flex gap-2.5", isUser && "flex-row-reverse")}>
-      <Avatar size="sm" className={cn("shrink-0", isUser ? "bg-primary" : "bg-(--chart-2)")}>
-        <AvatarFallback className={cn("text-white", isUser ? "bg-primary" : "bg-(--chart-2)")}>
-          {isUser ? <User className="size-4" /> : <Bot className="size-4" />}
-        </AvatarFallback>
-      </Avatar>
+      {isUser ? <UserAvatar /> : <SeraAvatar />}
       <div className={cn(
-        "max-w-[80%] rounded-xl px-3.5 py-2.5",
-        isUser ? "bg-primary text-white" : "bg-surface border border-border text-text"
+        "max-w-[80%] rounded-2xl px-4 py-3",
+        isUser ? "bg-[#0d1117] text-white" : "bg-surface-sunken border border-border text-text"
       )}>
         {children}
       </div>
@@ -59,7 +72,7 @@ export const ChatThread = React.forwardRef<ChatThreadHandle, { conversationId: s
         onToken: (t) => setLive((p) => (p ? { ...p, assistant: p.assistant + t, tool: null } : p)),
         onTool: (name) => setLive((p) => (p ? { ...p, tool: name } : p)),
         onDone: () => { setLive(null); void history.refetch(); onTitle?.(); },
-        onError: (m) => setLive((p) => (p ? { ...p, assistant: p.assistant + `\n\n_⚠️ ${m}_`, tool: null } : p)),
+        onError: (m) => setLive((p) => (p ? { ...p, assistant: p.assistant + `\n\n_${m}_`, tool: null } : p)),
       });
     }, [conversationId, streaming, stream, history, onTitle]);
 
@@ -73,15 +86,15 @@ export const ChatThread = React.forwardRef<ChatThreadHandle, { conversationId: s
         {history.isLoading && conversationId ? (
           <Skeleton className="h-20 w-2/3" />
         ) : empty ? (
-          <div className="flex h-full flex-col items-center justify-center text-center gap-3 py-8">
-            <div className="rounded-2xl bg-primary/10 p-4 text-primary dark:text-chart-3"><Sparkles className="size-7" /></div>
+          <div className="flex h-full flex-col items-center justify-center text-center gap-4 py-8">
+            <SeraAvatar size="md" />
             <div>
-              <p className="font-semibold text-text">Hi, I'm Sera 👋</p>
-              <p className="text-sm text-text-muted max-w-xs">Ask about your leave, attendance, payslips, or raise a ticket — I work with your live HR data.</p>
+              <p className="text-base font-semibold text-text">Sera</p>
+              <p className="text-sm text-text-muted max-w-xs mt-1">Your HR assistant — ask about leave, attendance, payslips, policies, or raise a ticket.</p>
             </div>
-            <div className={cn("flex flex-wrap justify-center gap-2 mt-1", compact && "px-2")}>
+            <div className={cn("flex flex-wrap justify-center gap-2 mt-2", compact && "px-2")}>
               {SUGGESTED_PROMPTS.slice(0, compact ? 3 : 5).map((p) => (
-                <button key={p} onClick={() => send(p)} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-text-muted hover:border-primary hover:text-text transition-colors cursor-pointer">
+                <button key={p} onClick={() => send(p)} className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted hover:border-[#0d1117] hover:text-text transition-colors cursor-pointer">
                   {p}
                 </button>
               ))}
@@ -100,11 +113,11 @@ export const ChatThread = React.forwardRef<ChatThreadHandle, { conversationId: s
                 <Bubble role="ASSISTANT">
                   {live.tool && (
                     <p className="flex items-center gap-1.5 text-xs text-text-muted mb-1.5">
-                      <Wrench className="size-3.5 animate-pulse" /> Using {live.tool.replace(/_/g, " ")}…
+                      <Wrench className="size-3.5 animate-pulse" /> Using {live.tool.replace(/_/g, " ")}...
                     </p>
                   )}
                   {live.assistant ? <Markdown text={live.assistant} /> : !live.tool && (
-                    <span className="inline-flex gap-1">
+                    <span className="inline-flex gap-1 py-1">
                       <span className="size-1.5 rounded-full bg-text-faint animate-bounce" />
                       <span className="size-1.5 rounded-full bg-text-faint animate-bounce [animation-delay:0.15s]" />
                       <span className="size-1.5 rounded-full bg-text-faint animate-bounce [animation-delay:0.3s]" />

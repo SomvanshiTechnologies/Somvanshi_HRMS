@@ -38,6 +38,13 @@ export const ManualMarkSchema = z.object({
   remarks: z.string().max(500).optional(),
 });
 
+export const BulkMarkSchema = z.object({
+  employeeIds: z.array(z.string().min(1)).min(1).max(500),
+  date: z.coerce.date(),
+  status: z.enum(["PRESENT", "ABSENT", "HALF_DAY", "ON_LEAVE", "HOLIDAY", "WEEK_OFF", "WORK_FROM_HOME"]),
+  remarks: z.string().max(500).optional(),
+});
+
 export const CreateShiftSchema = z.object({
   name: z.string().min(2).max(60),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm"),
@@ -53,8 +60,16 @@ export const AssignShiftSchema = z.object({
   effectiveFrom: z.coerce.date().default(() => new Date()),
 });
 
+export const ReportQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100).default(new Date().getFullYear()),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  departmentId: z.string().optional(),
+});
+
 export type PunchInput = z.infer<typeof PunchSchema>;
 export type MonthQuery = z.infer<typeof MonthQuerySchema>;
 export type DayQuery = z.infer<typeof DayQuerySchema>;
+export type ReportQuery = z.infer<typeof ReportQuerySchema>;
 export type CorrectionRequestInput = z.infer<typeof CorrectionRequestSchema>;
 export type ManualMarkInput = z.infer<typeof ManualMarkSchema>;
+export type BulkMarkInput = z.infer<typeof BulkMarkSchema>;

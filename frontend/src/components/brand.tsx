@@ -1,38 +1,34 @@
 import { cn } from "@/lib/utils";
-import logoUrl from "@/assets/brand/logo_STech.jpg";
 
-/**
- * SomHR brand lockup. The real Somvanshi Technologies logo is used everywhere —
- * on light surfaces (login, emails) and as a white logo-chip inside the dark
- * sidebar so the mark stays legible regardless of its own colours.
- */
-/** Small icon-only logo tile (collapsed sidebar / favicons). object-contain, never cropped. */
+const LOGO_URL = "/logo-dark.png";
+
+/** Small icon-only logo tile (collapsed sidebar). */
 export function BrandMark({ size = 36, className }: { size?: number; className?: string }) {
   return (
     <div
-      className={cn("flex items-center justify-center overflow-hidden rounded-lg bg-white shadow-sm select-none", className)}
+      className={cn("flex items-center justify-center overflow-hidden rounded-lg select-none", className)}
       style={{ width: size, height: size }}
     >
-      <img src={logoUrl} alt="Somvanshi Technologies" className="h-full w-full object-contain p-0.5" />
+      <img src={LOGO_URL} alt="Somvanshi Technologies" className="h-full w-full object-contain p-0.5" />
     </div>
   );
 }
 
-/** Sidebar brand. Expanded: compact logo tile + wordmark. Collapsed: icon only. */
+/** Sidebar brand. Expanded: wide logo + wordmark below. Collapsed: icon only. */
 export function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
-  if (collapsed) return <BrandMark size={36} className="ring-1 ring-white/20" />;
+  if (collapsed) return <BrandMark size={36} />;
   return (
-    <div className="flex items-center gap-2.5 overflow-hidden">
-      <BrandMark size={40} className="shrink-0 ring-1 ring-white/20" />
+    <div className="flex flex-col gap-1 overflow-hidden">
+      <img src={LOGO_URL} alt="Somvanshi Technologies" className="h-10 w-auto object-contain object-left" />
       <div className="leading-tight">
-        <p className="text-[15px] font-semibold text-white tracking-tight">Somvanshi HRMS</p>
+        <p className="text-[13px] font-semibold text-white tracking-tight">Somvanshi HRMS</p>
         <p className="text-[10px] text-sidebar-text">People. Performance. Growth.</p>
       </div>
     </div>
   );
 }
 
-/** Full logo for light surfaces (login, headers) — object-contain, never cropped. */
+/** Full logo for light surfaces (login mobile, headers). */
 export function CompanyLogo({ className }: { className?: string }) {
-  return <img src={logoUrl} alt="Somvanshi Technologies" className={cn("block h-14 w-auto object-contain", className)} />;
+  return <img src={LOGO_URL} alt="Somvanshi Technologies" className={cn("block h-14 w-auto object-contain", className)} />;
 }

@@ -1,11 +1,13 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Banknote, Check, CreditCard, Download, FileText, Play, Users, Wallet } from "lucide-react";
+import { Banknote, Check, CreditCard, Download, FileText, FileUp, Play, Upload, Users, Wallet } from "lucide-react";
 import {
-  MONTHS, downloadRegister, openPayslipPdf, useProcessRun, useRun, useRunAction,
+  MONTHS, downloadRegister, openPayslipPdf, useImportSinglePayslip, useProcessRun, useRun, useRunAction,
   useRuns, useSalaryEmployees, useSetSalary, useStructures, type PayrollRun,
 } from "./usePayroll";
+import { ImportDialog } from "@/features/imports/ImportDialog";
+import { ImportHistory } from "@/features/imports/ImportHistory";
 import { apiErrorMessage } from "@/lib/api";
 import { cn, compactINR, formatDate, initials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -203,7 +205,7 @@ function SalariesTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Set salary — {editFor?.name}</DialogTitle>
-            <DialogDescription>BASIC 50% of gross · HRA 50% of basic · balance Special Allowance · PF/PT/ESI/TDS auto-computed.</DialogDescription>
+            <DialogDescription>BASIC 50% of gross · HRA 50% of basic · balance Special Allowance · PF/PT/ESI/TDS</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <FormField label="Structure">
@@ -237,7 +239,91 @@ function SalariesTab() {
   );
 }
 
+/* ---------- imports tab (historical payslips) ---------- */
+function ImportsTab() {
+  const employees = useSalaryEmployees();
+  const single = useImportSinglePayslip();
+  const now = new Date();
+  const [employeeId, setEmployeeId] = React.useState("");
+  const [month, setMonth] = React.useState(now.getMonth() + 1);
+  const [year, setYear] = React.useState(now.getFullYear());
+  const [netPay, setNetPay] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* single upload */}
+        <Card className="rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2"><FileUp className="size-4 text-primary" /> Single payslip</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField label="Employee">
+              <Select value={employeeId} onValueChange={setEmployeeId}>
+                <SelectTrigger aria-label="Employee"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectContent>
+                  {(employees.data ?? []).map((e) => <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName} · {e.employeeCode}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Month">
+                <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+                  <SelectTrigger aria-label="Month"><SelectValue /></SelectTrigger>
+                  <SelectContent>{MONTHS.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Year" htmlFor="imp-year">
+                <Input id="imp-year" type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+              </FormField>
+            </div>
+            <FormField label="Net Pay (optional)" htmlFor="imp-net">
+              <Input id="imp-net" type="number" min={0} value={netPay} onChange={(e) => setNetPay(e.target.value)} placeholder="e.g. 45000" />
+            </FormField>
+            <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border bg-surface-sunken/40 px-4 py-5 text-center text-sm hover:border-primary/50">
+              <Upload className="size-5 text-text-faint" />
+              {file ? <strong>{file.name}</strong> : "Choose payslip PDF"}
+              <input type="file" accept="application/pdf" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </label>
+            <Button
+              className="w-full"
+              disabled={!employeeId || !file}
+              loading={single.isPending}
+              onClick={async () => {
+                await single.mutateAsync({ employeeId, month, year, netPay: netPay ? Number(netPay) : undefined, file: file! });
+                setFile(null); setNetPay("");
+              }}
+            >
+              Import payslip
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* bulk upload */}
+        <Card className="rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2"><Upload className="size-4 text-primary" /> Bulk import</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-text-muted">
+              Upload an Excel mapping (Employee Code, Month, Year, PDF File) together with the matching PDF files. Preview and validate before importing.
+            </p>
+            <ImportDialog type="payslip" title="Bulk import payslips" acceptsPdfs>
+              <Button variant="secondary"><Upload /> Start bulk import</Button>
+            </ImportDialog>
+          </CardContent>
+        </Card>
+      </div>
+
+      <ImportHistory type="payslip" title="Payslip import history" />
+    </div>
+  );
+}
+
 export function PayrollPage() {
+  const { can } = usePermissions();
+  const canManage = can("payroll:manage");
   return (
     <div className="space-y-5">
       <div>
@@ -248,9 +334,11 @@ export function PayrollPage() {
         <TabsList>
           <TabsTrigger value="runs"><Banknote /> Runs</TabsTrigger>
           <TabsTrigger value="salaries"><Users /> Salaries</TabsTrigger>
+          {canManage && <TabsTrigger value="imports"><FileUp /> Import payslips</TabsTrigger>}
         </TabsList>
         <TabsContent value="runs"><RunsTab /></TabsContent>
         <TabsContent value="salaries"><SalariesTab /></TabsContent>
+        {canManage && <TabsContent value="imports"><ImportsTab /></TabsContent>}
       </Tabs>
     </div>
   );

@@ -15,6 +15,8 @@ import {
   DecideLeaveSchema,
   EditLeaveSchema,
   HolidaySchema,
+  LeavePolicySchema,
+  LeaveTypeSchema,
   RequestInfoSchema,
   WorkflowStepsSchema,
   type CalendarQuery,
@@ -25,6 +27,14 @@ leaveRouter.use(requireAuth);
 
 // ---- reference data ----
 leaveRouter.get("/types", requirePermission(PERMISSIONS.LEAVE_READ), asyncHandler(async (_req: Request, res: Response) => void ok(res, await leaveService.listTypes())));
+
+// ---- leave policy builder (DB-driven; HR/admin only) ----
+leaveRouter.get("/admin/types", requirePermission(PERMISSIONS.LEAVE_MANAGE), asyncHandler(async (_req: Request, res: Response) => void ok(res, await leaveService.listAllTypes())));
+leaveRouter.post("/admin/types", requirePermission(PERMISSIONS.LEAVE_MANAGE), validate({ body: LeaveTypeSchema }), asyncHandler(async (req: Request, res: Response) => void created(res, await leaveService.createType(req, req.body), "Leave type created.")));
+leaveRouter.put("/admin/types/:id", requirePermission(PERMISSIONS.LEAVE_MANAGE), validate({ body: LeaveTypeSchema }), asyncHandler(async (req: Request, res: Response) => void ok(res, await leaveService.updateType(req, req.params["id"] as string, req.body), "Leave type updated.")));
+leaveRouter.post("/admin/policies", requirePermission(PERMISSIONS.LEAVE_MANAGE), validate({ body: LeavePolicySchema }), asyncHandler(async (req: Request, res: Response) => void created(res, await leaveService.createPolicy(req, req.body), "Policy created.")));
+leaveRouter.put("/admin/policies/:id", requirePermission(PERMISSIONS.LEAVE_MANAGE), validate({ body: LeavePolicySchema }), asyncHandler(async (req: Request, res: Response) => void ok(res, await leaveService.updatePolicy(req, req.params["id"] as string, req.body), "Policy updated.")));
+leaveRouter.delete("/admin/policies/:id", requirePermission(PERMISSIONS.LEAVE_MANAGE), asyncHandler(async (req: Request, res: Response) => { await leaveService.deletePolicy(req, req.params["id"] as string); noContent(res); }));
 
 // ---- employee self-service ----
 leaveRouter.get(

@@ -23,7 +23,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
 
   const nav = (
     <nav className="flex h-full flex-col" aria-label="Main navigation">
-      <div className={cn("flex h-16 items-center border-b border-white/8 px-4", collapsed && "justify-center px-2")}>
+      <div className={cn("flex items-center border-b border-white/8 px-4 py-4", collapsed ? "justify-center px-2 h-16" : "min-h-[5.5rem]")}>
         <BrandLockup collapsed={collapsed} />
       </div>
 

@@ -1,23 +1,62 @@
 /**
- * Indian payroll math (simplified, documented assumptions):
- *  - monthly gross = annual CTC / 12
- *  - BASIC = 50% of gross · HRA = 50% of basic · Special Allowance = remainder
- *  - PF (employee) = 12% of basic, capped at ₹1,800 (₹15,000 wage ceiling)
- *  - PT = ₹200/month (Maharashtra flat; ₹300 in February is ignored for simplicity)
- *  - ESI (employee) = 0.75% of gross when gross ≤ ₹21,000, else nil
- *  - TDS = new-regime FY slabs with ₹75,000 standard deduction and §87A rebate
- *    (zero tax up to ₹12L taxable), annual tax / 12, +4% cess
- *  - LOP proration = paidDays / calendar days of the month
+ * Indian payroll math — now DRIVEN BY a DB-backed StatutoryConfig instead of
+ * hardcoded constants, so HR can tune the structure split and PF/ESI/PT/TDS
+ * rates per company. `DEFAULT_STATUTORY` reproduces the previous behaviour and
+ * is used when no config row exists yet.
  */
 
-/**
- * Company payroll policy toggles. Somvanshi Technologies is not yet running a
- * structured Basic/HRA/Special-Allowance split or statutory deductions, so the
- * whole gross is paid as a single line and PF/PT/ESI/TDS are skipped. Flip these
- * on once PF/ESI/PT registration and a defined CTC structure are in place.
- */
-export const PAYROLL_FLAT_STRUCTURE = true;
-export const PAYROLL_STATUTORY_DEDUCTIONS = false;
+export interface StatutoryConfig {
+  flatStructure: boolean;
+  basicPercentOfCtc: number;
+  hraPercentOfBasic: number;
+  statutoryEnabled: boolean;
+  pfEnabled: boolean;
+  pfRate: number; // % of basic
+  pfWageCap: number;
+  esiEnabled: boolean;
+  esiRate: number; // % of gross
+  esiGrossThreshold: number;
+  ptEnabled: boolean;
+  ptAmount: number;
+  ptGrossThreshold: number;
+  tdsEnabled: boolean;
+  tdsStandardDeduction: number;
+  tdsRebateLimit: number;
+  tdsCessRate: number; // %
+  tdsSlabs: Array<[number, number, number]> | null; // [from, to, rate]
+}
+
+/** Built-in new-regime FY slabs used when config.tdsSlabs is null. */
+const DEFAULT_TDS_SLABS: Array<[number, number, number]> = [
+  [0, 4_00_000, 0],
+  [4_00_000, 8_00_000, 0.05],
+  [8_00_000, 12_00_000, 0.1],
+  [12_00_000, 16_00_000, 0.15],
+  [16_00_000, 20_00_000, 0.2],
+  [20_00_000, 24_00_000, 0.25],
+  [24_00_000, Infinity, 0.3],
+];
+
+export const DEFAULT_STATUTORY: StatutoryConfig = {
+  flatStructure: true,
+  basicPercentOfCtc: 50,
+  hraPercentOfBasic: 50,
+  statutoryEnabled: false,
+  pfEnabled: true,
+  pfRate: 12,
+  pfWageCap: 15000,
+  esiEnabled: true,
+  esiRate: 0.75,
+  esiGrossThreshold: 21000,
+  ptEnabled: true,
+  ptAmount: 200,
+  ptGrossThreshold: 7500,
+  tdsEnabled: true,
+  tdsStandardDeduction: 75000,
+  tdsRebateLimit: 12_00_000,
+  tdsCessRate: 4,
+  tdsSlabs: null,
+};
 
 export interface SalaryBreakup {
   basic: number;
@@ -26,48 +65,44 @@ export interface SalaryBreakup {
   gross: number;
 }
 
-export function breakupFromCtc(annualCtc: number): SalaryBreakup {
+export function breakupFromCtc(annualCtc: number, cfg: StatutoryConfig = DEFAULT_STATUTORY): SalaryBreakup {
   const gross = round2(annualCtc / 12);
-  if (PAYROLL_FLAT_STRUCTURE) {
+  if (cfg.flatStructure) {
     return { basic: gross, hra: 0, specialAllowance: 0, gross };
   }
-  const basic = round2(gross * 0.5);
-  const hra = round2(basic * 0.5);
+  const basic = round2(gross * (cfg.basicPercentOfCtc / 100));
+  const hra = round2(basic * (cfg.hraPercentOfBasic / 100));
   const specialAllowance = round2(gross - basic - hra);
   return { basic, hra, specialAllowance, gross };
 }
 
-export function pfEmployee(basic: number): number {
-  return round2(Math.min(basic, 15000) * 0.12);
+export function pfEmployee(basic: number, cfg: StatutoryConfig = DEFAULT_STATUTORY): number {
+  if (!cfg.pfEnabled) return 0;
+  return round2(Math.min(basic, cfg.pfWageCap) * (cfg.pfRate / 100));
 }
 
-export function professionalTax(gross: number): number {
-  return gross > 7500 ? 200 : 0;
+export function professionalTax(gross: number, cfg: StatutoryConfig = DEFAULT_STATUTORY): number {
+  if (!cfg.ptEnabled) return 0;
+  return gross > cfg.ptGrossThreshold ? cfg.ptAmount : 0;
 }
 
-export function esiEmployee(gross: number): number {
-  return gross <= 21000 ? round2(gross * 0.0075) : 0;
+export function esiEmployee(gross: number, cfg: StatutoryConfig = DEFAULT_STATUTORY): number {
+  if (!cfg.esiEnabled) return 0;
+  return gross <= cfg.esiGrossThreshold ? round2(gross * (cfg.esiRate / 100)) : 0;
 }
 
-/** Monthly TDS under the new regime (simplified — no investments/other income). */
-export function monthlyTds(annualGross: number): number {
-  const taxable = Math.max(0, annualGross - 75_000);
-  if (taxable <= 12_00_000) return 0; // §87A rebate
+/** Monthly TDS (simplified — no investments/other income). */
+export function monthlyTds(annualGross: number, cfg: StatutoryConfig = DEFAULT_STATUTORY): number {
+  if (!cfg.tdsEnabled) return 0;
+  const taxable = Math.max(0, annualGross - cfg.tdsStandardDeduction);
+  if (taxable <= cfg.tdsRebateLimit) return 0; // §87A-style rebate
 
-  const slabs: Array<[number, number, number]> = [
-    [0, 4_00_000, 0],
-    [4_00_000, 8_00_000, 0.05],
-    [8_00_000, 12_00_000, 0.1],
-    [12_00_000, 16_00_000, 0.15],
-    [16_00_000, 20_00_000, 0.2],
-    [20_00_000, 24_00_000, 0.25],
-    [24_00_000, Infinity, 0.3],
-  ];
+  const slabs = cfg.tdsSlabs ?? DEFAULT_TDS_SLABS;
   let tax = 0;
   for (const [lo, hi, rate] of slabs) {
     if (taxable > lo) tax += (Math.min(taxable, hi) - lo) * rate;
   }
-  tax *= 1.04; // health & education cess
+  tax *= 1 + cfg.tdsCessRate / 100;
   return round2(tax / 12);
 }
 

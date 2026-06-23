@@ -11,8 +11,12 @@ import {
   Plus,
   Settings2,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
+import { LeavePolicyBuilder } from "./LeavePolicyBuilder";
+import { ImportDialog } from "@/features/imports/ImportDialog";
+import { ImportHistory } from "@/features/imports/ImportHistory";
 import {
   useAddHoliday,
   useApplyLeave,
@@ -322,38 +326,44 @@ function CalendarTab() {
           <Button variant="secondary" size="icon-sm" onClick={() => shift(1)} aria-label="Next month"><ChevronRight /></Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 sm:p-5">
         {calendar.isLoading ? (
-          <Skeleton className="h-80 w-full" />
+          <Skeleton className="h-80 w-full rounded-xl" />
         ) : (
           <>
-            <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-medium text-text-faint mb-1.5">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <span key={d}>{d}</span>)}
+            <div className="grid grid-cols-7 gap-px text-center text-[11px] font-semibold uppercase tracking-wide text-text-faint mb-2">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+                <span key={d} className={cn(i === 0 && "text-danger/60")}>{d}</span>
+              ))}
             </div>
-            <div className="grid grid-cols-7 gap-1.5">
+            <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: firstDow }).map((_, i) => <span key={`pad-${i}`} />)}
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const d = i + 1;
                 const holiday = holidaysByDay.get(d);
                 const leaves = leavesByDay.get(d) ?? [];
                 const dow = new Date(year, month - 1, d).getDay();
+                const isToday = d === now.getDate() && month === now.getMonth() + 1 && year === now.getFullYear();
                 return (
                   <div
                     key={d}
                     className={cn(
-                      "min-h-16 rounded-lg border border-border p-1.5 text-xs",
-                      (dow === 0 || dow === 6) && "bg-surface-sunken/60",
-                      holiday && "bg-info-bg border-info/25"
+                      "min-h-[4.5rem] rounded-lg border p-1.5 text-xs transition-colors",
+                      holiday ? "bg-orange-50 border-orange-300 dark:bg-orange-950/30 dark:border-orange-700/40" : (dow === 0 || dow === 6) ? "bg-surface-sunken/50 border-border/60" : "border-border",
+                      isToday && "ring-2 ring-primary ring-offset-1 ring-offset-surface"
                     )}
                   >
-                    <span className="font-medium text-text tabular-nums">{d}</span>
-                    {holiday && <p className="text-[10px] text-info line-clamp-1" title={holiday}>🗓 {holiday}</p>}
+                    <span className="flex items-center justify-between">
+                      <span className={cn("font-semibold tabular-nums", isToday ? "text-primary" : dow === 0 ? "text-danger/70" : "text-text")}>{d}</span>
+                      {isToday && <span className="rounded bg-primary px-1 text-[8px] font-bold uppercase leading-4 text-white">Today</span>}
+                    </span>
+                    {holiday && <p className="mt-0.5 text-[10px] text-info font-medium line-clamp-1" title={holiday}>{holiday}</p>}
                     {leaves.slice(0, 2).map((l, idx) => (
-                      <p key={idx} className={cn("mt-0.5 truncate rounded px-1 text-[10px] text-white", l.status === "PENDING" && "opacity-60")} style={{ backgroundColor: l.color }} title={l.name}>
+                      <p key={idx} className={cn("mt-0.5 truncate rounded-sm px-1 py-px text-[10px] font-medium text-white leading-tight", l.status === "PENDING" && "opacity-60")} style={{ backgroundColor: l.color }} title={`${l.name} (${l.status})`}>
                         {l.name}
                       </p>
                     ))}
-                    {leaves.length > 2 && <p className="text-[10px] text-text-faint">+{leaves.length - 2} more</p>}
+                    {leaves.length > 2 && <p className="mt-0.5 text-[10px] text-text-faint font-medium">+{leaves.length - 2} more</p>}
                   </div>
                 );
               })}
@@ -500,9 +510,11 @@ function ApprovalsTab() {
   );
 }
 
-/* ================= admin tab (holidays + workflow) ================= */
+/* ================= admin tab (holidays + workflow + policies + import) ================= */
 
 const ROLE_OPTIONS = ["HR_ADMIN", "HR_EXECUTIVE", "DEPARTMENT_HEAD", "FINANCE_MANAGER", "SUPER_ADMIN"];
+const ADMIN_SECTIONS = ["import", "holidays", "workflow", "policies"] as const;
+type AdminSection = typeof ADMIN_SECTIONS[number];
 
 function AdminTab() {
   const year = new Date().getFullYear();
@@ -512,96 +524,186 @@ function AdminTab() {
   const workflow = useLeaveWorkflow(true);
   const setWorkflow = useSetLeaveWorkflow();
 
+  const [section, setSection] = React.useState<AdminSection>("import");
   const [holidayName, setHolidayName] = React.useState("");
   const [holidayDate, setHolidayDate] = React.useState("");
+  const [holidayPage, setHolidayPage] = React.useState(1);
+  const HOLIDAYS_PER_PAGE = 10;
   const [steps, setSteps] = React.useState<Array<{ type: "MANAGER" | "ROLE"; role?: string }> | null>(null);
 
   const effectiveSteps = steps ?? (workflow.data?.steps as Array<{ type: "MANAGER" | "ROLE"; role?: string }> | undefined) ?? [];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* holidays */}
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2"><CalendarPlus className="size-4" /> Holiday calendar {year}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-2">
-            <Input placeholder="Holiday name" value={holidayName} onChange={(e) => setHolidayName(e.target.value)} aria-label="Holiday name" />
-            <Input type="date" value={holidayDate} onChange={(e) => setHolidayDate(e.target.value)} className="w-40" aria-label="Holiday date" />
-            <Button
-              size="sm"
-              disabled={holidayName.length < 2 || !holidayDate}
-              loading={addHoliday.isPending}
-              onClick={async () => {
-                await addHoliday.mutateAsync({ name: holidayName, date: holidayDate, isOptional: false });
-                setHolidayName(""); setHolidayDate("");
-              }}
-            >
-              <Plus /> Add
-            </Button>
-          </div>
-          {!holidays.data?.length ? (
-            <p className="text-sm text-text-faint">No holidays yet — add the company calendar so leave math and attendance views account for them.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {holidays.data.map((h) => (
-                <div key={h.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                  <span className="text-text">🗓 {h.name}</span>
-                  <span className="flex items-center gap-2 text-text-muted">
-                    {formatDate(h.date)}
-                    <Button variant="ghost" size="icon-sm" aria-label="Remove holiday" onClick={() => removeHoliday.mutate(h.id)}>
-                      <Trash2 className="text-danger size-3.5" />
-                    </Button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {/* section nav */}
+      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+        {([
+          { key: "import" as const, label: "Import Data", icon: Upload },
+          { key: "holidays" as const, label: "Holiday Calendar", icon: CalendarPlus },
+          { key: "workflow" as const, label: "Approval Workflow", icon: Settings2 },
+          { key: "policies" as const, label: "Leave Policies", icon: ClipboardCheck },
+        ]).map((s) => (
+          <Button
+            key={s.key}
+            variant={section === s.key ? "primary" : "ghost"}
+            size="sm"
+            onClick={() => setSection(s.key)}
+          >
+            <s.icon className="size-4" /> {s.label}
+          </Button>
+        ))}
+      </div>
 
-      {/* workflow */}
-      <Card className="rounded-xl h-fit">
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2"><Settings2 className="size-4" /> Approval workflow</CardTitle>
-          <p className="text-xs text-text-muted">Requests pass through each step in order. Changes apply to new requests.</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {effectiveSteps.map((step, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Badge variant="primary" className="shrink-0">Step {i + 1}</Badge>
-              <Select
-                value={step.type === "MANAGER" ? "MANAGER" : `ROLE:${step.role}`}
-                onValueChange={(v) => {
-                  const next = [...effectiveSteps];
-                  next[i] = v === "MANAGER" ? { type: "MANAGER" } : { type: "ROLE", role: v.slice(5) };
-                  setSteps(next);
+      {/* holidays */}
+      {section === "holidays" && (
+        <Card className="rounded-xl">
+          <CardHeader className="flex-row items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-sm">Holiday Calendar — {year}</CardTitle>
+            <div className="flex gap-2">
+              <ImportDialog type="holiday" title="Import holidays" onCompleted={() => holidays.refetch()}>
+                <Button variant="secondary" size="sm"><Upload /> Import Excel</Button>
+              </ImportDialog>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Input placeholder="Holiday name" value={holidayName} onChange={(e) => setHolidayName(e.target.value)} aria-label="Holiday name" className="flex-1 min-w-[160px]" />
+              <Input type="date" value={holidayDate} onChange={(e) => setHolidayDate(e.target.value)} className="w-44" aria-label="Holiday date" />
+              <Button
+                size="sm"
+                disabled={holidayName.length < 2 || !holidayDate}
+                loading={addHoliday.isPending}
+                onClick={async () => {
+                  await addHoliday.mutateAsync({ name: holidayName, date: holidayDate, isOptional: false });
+                  setHolidayName(""); setHolidayDate("");
                 }}
               >
-                <SelectTrigger aria-label={`Step ${i + 1}`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MANAGER">Reporting Manager</SelectItem>
-                  {ROLE_OPTIONS.map((r) => (
-                    <SelectItem key={r} value={`ROLE:${r}`}>{r.replace(/_/g, " ")}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button variant="ghost" size="icon-sm" aria-label="Remove step" disabled={effectiveSteps.length <= 1} onClick={() => setSteps(effectiveSteps.filter((_, idx) => idx !== i))}>
-                <Trash2 className="size-3.5 text-danger" />
+                <Plus /> Add Holiday
               </Button>
             </div>
-          ))}
-          <div className="flex justify-between">
-            <Button variant="secondary" size="sm" disabled={effectiveSteps.length >= 5} onClick={() => setSteps([...effectiveSteps, { type: "ROLE", role: "HR_ADMIN" }])}>
-              <Plus /> Add step
-            </Button>
-            <Button size="sm" disabled={!steps} loading={setWorkflow.isPending} onClick={async () => { await setWorkflow.mutateAsync(effectiveSteps); setSteps(null); }}>
-              Save workflow
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            {!holidays.data?.length ? (
+              <EmptyState icon={CalendarPlus} title="No holidays yet" description="Add holidays manually or import from an Excel file." />
+            ) : (
+              <>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-sunken text-left text-[11px] uppercase tracking-wide text-text-muted">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold w-10">#</th>
+                        <th className="px-4 py-2.5 font-semibold">Holiday</th>
+                        <th className="px-4 py-2.5 font-semibold">Date</th>
+                        <th className="px-4 py-2.5 font-semibold">Type</th>
+                        <th className="px-4 py-2.5 font-semibold w-12" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holidays.data.slice((holidayPage - 1) * HOLIDAYS_PER_PAGE, holidayPage * HOLIDAYS_PER_PAGE).map((h, idx) => (
+                        <tr key={h.id} className="border-t border-border hover:bg-surface-sunken/40">
+                          <td className="px-4 py-2.5 text-text-faint tabular-nums">{(holidayPage - 1) * HOLIDAYS_PER_PAGE + idx + 1}</td>
+                          <td className="px-4 py-2.5 font-medium text-text">{h.name}</td>
+                          <td className="px-4 py-2.5 text-text-muted tabular-nums">{formatDate(h.date)}</td>
+                          <td className="px-4 py-2.5">
+                            <Badge variant={h.isOptional ? "warning" : "success"}>{h.isOptional ? "Optional" : "Gazetted"}</Badge>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <Button variant="ghost" size="icon-sm" aria-label="Remove holiday" onClick={() => removeHoliday.mutate(h.id)}>
+                              <Trash2 className="text-danger size-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {holidays.data.length > HOLIDAYS_PER_PAGE && (
+                  <div className="flex items-center justify-between pt-3">
+                    <p className="text-xs text-text-muted">
+                      Showing {(holidayPage - 1) * HOLIDAYS_PER_PAGE + 1}–{Math.min(holidayPage * HOLIDAYS_PER_PAGE, holidays.data.length)} of {holidays.data.length} holidays
+                    </p>
+                    <div className="flex gap-1.5">
+                      <Button variant="secondary" size="sm" disabled={holidayPage <= 1} onClick={() => setHolidayPage((p) => p - 1)}>
+                        <ChevronLeft /> Prev
+                      </Button>
+                      <Button variant="secondary" size="sm" disabled={holidayPage >= Math.ceil(holidays.data.length / HOLIDAYS_PER_PAGE)} onClick={() => setHolidayPage((p) => p + 1)}>
+                        Next <ChevronRight />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* workflow */}
+      {section === "workflow" && (
+        <Card className="rounded-xl max-w-2xl">
+          <CardHeader>
+            <CardTitle className="text-sm">Leave Approval Workflow</CardTitle>
+            <p className="text-xs text-text-muted">Requests pass through each step in order. Changes apply to new requests only.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {effectiveSteps.map((step, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                <Badge variant="primary" className="shrink-0">Step {i + 1}</Badge>
+                <Select
+                  value={step.type === "MANAGER" ? "MANAGER" : `ROLE:${step.role}`}
+                  onValueChange={(v) => {
+                    const next = [...effectiveSteps];
+                    next[i] = v === "MANAGER" ? { type: "MANAGER" } : { type: "ROLE", role: v.slice(5) };
+                    setSteps(next);
+                  }}
+                >
+                  <SelectTrigger aria-label={`Step ${i + 1}`} className="flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MANAGER">Reporting Manager</SelectItem>
+                    {ROLE_OPTIONS.map((r) => (
+                      <SelectItem key={r} value={`ROLE:${r}`}>{r.replace(/_/g, " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="ghost" size="icon-sm" aria-label="Remove step" disabled={effectiveSteps.length <= 1} onClick={() => setSteps(effectiveSteps.filter((_, idx) => idx !== i))}>
+                  <Trash2 className="size-3.5 text-danger" />
+                </Button>
+              </div>
+            ))}
+            <div className="flex justify-between pt-2">
+              <Button variant="secondary" size="sm" disabled={effectiveSteps.length >= 5} onClick={() => setSteps([...effectiveSteps, { type: "ROLE", role: "HR_ADMIN" }])}>
+                <Plus /> Add Step
+              </Button>
+              <Button size="sm" disabled={!steps} loading={setWorkflow.isPending} onClick={async () => { await setWorkflow.mutateAsync(effectiveSteps); setSteps(null); }}>
+                Save Workflow
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* policies */}
+      {section === "policies" && <LeavePolicyBuilder />}
+
+      {/* import */}
+      {section === "import" && (
+        <div className="space-y-4">
+          <Card className="rounded-xl">
+            <CardHeader>
+              <CardTitle className="text-sm">Import Leave Data</CardTitle>
+              <p className="text-xs text-text-muted">Bring in historical leave balances and transactions from Excel. Preview and validate before importing.</p>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-3">
+              <ImportDialog type="leave_balance" title="Import leave balances">
+                <Button variant="secondary"><Upload /> Import Balances</Button>
+              </ImportDialog>
+              <ImportDialog type="leave_txn" title="Import leave transactions">
+                <Button variant="secondary"><Upload /> Import Transactions</Button>
+              </ImportDialog>
+            </CardContent>
+          </Card>
+          <ImportHistory type="leave_balance" title="Leave balance import history" />
+          <ImportHistory type="leave_txn" title="Leave transaction import history" />
+        </div>
+      )}
     </div>
   );
 }
