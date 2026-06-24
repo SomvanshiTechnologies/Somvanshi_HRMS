@@ -241,7 +241,7 @@ const tools: Record<string, Tool> = {
       if (!company) return { error: "No company configured" };
       const count = await prisma.employee.count({ where: { departmentId: dept.id } });
       const prefix = dept.name.slice(0, 3).toUpperCase();
-      const loc = await prisma.location.findFirst({ where: { isHeadquarters: true } });
+      const loc = await prisma.location.findFirst();
       const employee = await prisma.employee.create({
         data: {
           firstName: String(args["firstName"]),
