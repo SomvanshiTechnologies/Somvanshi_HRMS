@@ -100,6 +100,60 @@ const tools: Record<string, Tool> = {
     },
   },
 
+  mark_attendance: {
+    permissions: ["attendance:manage"],
+    def: {
+      type: "function",
+      function: {
+        name: "mark_attendance",
+        description: "Mark attendance for employees on a date (admin/HR). Set status for everyone, or for specific employees named by the user. Confirm before calling.",
+        parameters: {
+          type: "object",
+          required: ["status"],
+          properties: {
+            status: { type: "string", description: "PRESENT, ABSENT, HALF_DAY, ON_LEAVE, WORK_FROM_HOME, HOLIDAY or WEEK_OFF" },
+            date: { type: "string", description: "YYYY-MM-DD; defaults to today" },
+            scope: { type: "string", description: "'all' to mark every active employee, or 'named' to mark only the employeeNames provided" },
+            employeeNames: { type: "array", items: { type: "string" }, description: "Names or codes of employees to mark, when scope is 'named'" },
+          },
+        },
+      },
+    },
+    run: async (req, args) => {
+      const status = String(args["status"]).toUpperCase();
+      const valid = ["PRESENT", "ABSENT", "HALF_DAY", "ON_LEAVE", "WORK_FROM_HOME", "HOLIDAY", "WEEK_OFF"];
+      if (!valid.includes(status)) return { error: `Invalid status. Use one of: ${valid.join(", ")}` };
+      const date = args["date"] ? new Date(String(args["date"])) : new Date();
+
+      let employeeIds: string[];
+      const scope = String(args["scope"] ?? "all");
+      if (scope === "named" && Array.isArray(args["employeeNames"]) && args["employeeNames"].length) {
+        const found: string[] = [];
+        const notFound: string[] = [];
+        for (const raw of args["employeeNames"] as unknown[]) {
+          const q = String(raw).trim();
+          const emp = await prisma.employee.findFirst({
+            where: { deletedAt: null, OR: [{ firstName: { contains: q } }, { lastName: { contains: q } }, { employeeCode: { contains: q } }] },
+            select: { id: true },
+          });
+          if (emp) found.push(emp.id); else notFound.push(q);
+        }
+        if (!found.length) return { error: `No matching employees found for: ${notFound.join(", ")}` };
+        employeeIds = found;
+      } else {
+        const all = await prisma.employee.findMany({
+          where: { deletedAt: null, status: { in: ["ONBOARDING", "PROBATION", "ACTIVE"] } },
+          select: { id: true },
+        });
+        employeeIds = all.map((e) => e.id);
+      }
+      if (!employeeIds.length) return { error: "No employees to mark" };
+
+      const result = await attendanceService.bulkMark(req, { employeeIds, date, status: status as never });
+      return { marked: result.count, status, date: date.toISOString().slice(0, 10) };
+    },
+  },
+
   list_my_payslips: {
     permissions: ["payroll:read"],
     def: {
