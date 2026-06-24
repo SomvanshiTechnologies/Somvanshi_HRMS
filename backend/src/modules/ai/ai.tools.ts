@@ -208,6 +208,107 @@ const tools: Record<string, Tool> = {
     },
   },
 
+  create_employee: {
+    permissions: ["employees:create"],
+    def: {
+      type: "function",
+      function: {
+        name: "create_employee",
+        description: "Add a new employee to the HRMS. Ask the user for all required details before calling. Confirm the details before creating.",
+        parameters: {
+          type: "object",
+          required: ["firstName", "lastName", "email", "departmentName", "designationTitle"],
+          properties: {
+            firstName: { type: "string" },
+            lastName: { type: "string" },
+            email: { type: "string", description: "Work email" },
+            phone: { type: "string" },
+            gender: { type: "string", description: "MALE, FEMALE or OTHER" },
+            dateOfJoining: { type: "string", description: "YYYY-MM-DD" },
+            departmentName: { type: "string", description: "Department name (e.g. Engineering, HR)" },
+            designationTitle: { type: "string", description: "Job title (e.g. Software Engineer)" },
+            employmentType: { type: "string", description: "FULL_TIME, PART_TIME, CONTRACT, INTERN or CONSULTANT" },
+          },
+        },
+      },
+    },
+    run: async (req, args) => {
+      const dept = await prisma.department.findFirst({ where: { name: { contains: String(args["departmentName"]) } } });
+      if (!dept) return { error: `Department "${args["departmentName"]}" not found` };
+      const desig = await prisma.designation.findFirst({ where: { title: { contains: String(args["designationTitle"]) } } });
+      if (!desig) return { error: `Designation "${args["designationTitle"]}" not found` };
+      const company = await prisma.company.findFirst();
+      if (!company) return { error: "No company configured" };
+      const count = await prisma.employee.count({ where: { departmentId: dept.id } });
+      const prefix = dept.name.slice(0, 3).toUpperCase();
+      const loc = await prisma.location.findFirst({ where: { isHeadquarters: true } });
+      const employee = await prisma.employee.create({
+        data: {
+          firstName: String(args["firstName"]),
+          lastName: String(args["lastName"]),
+          email: String(args["email"]),
+          phone: args["phone"] ? String(args["phone"]) : null,
+          gender: (String(args["gender"] ?? "UNDISCLOSED").toUpperCase()) as "MALE" | "FEMALE" | "OTHER" | "UNDISCLOSED",
+          dateOfJoining: args["dateOfJoining"] ? new Date(String(args["dateOfJoining"])) : new Date(),
+          departmentId: dept.id,
+          designationId: desig.id,
+          companyId: company.id,
+          locationId: loc?.id ?? null,
+          employeeCode: `${prefix}-${String(count + 1).padStart(3, "0")}`,
+          employmentType: (String(args["employmentType"] ?? "FULL_TIME").toUpperCase()) as "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERN" | "CONSULTANT",
+          status: "ACTIVE",
+        },
+      });
+      return { created: true, employeeCode: employee.employeeCode, name: `${employee.firstName} ${employee.lastName}`, id: employee.id };
+    },
+  },
+
+  get_employee_payslips: {
+    permissions: ["payroll:read_all"],
+    def: {
+      type: "function",
+      function: {
+        name: "get_employee_payslips",
+        description: "Get payslips for any employee by name or employee code. Admin/HR only.",
+        parameters: {
+          type: "object",
+          required: ["query"],
+          properties: {
+            query: { type: "string", description: "Employee name or code" },
+            year: { type: "number", description: "Filter by year (optional)" },
+          },
+        },
+      },
+    },
+    run: async (_req, args) => {
+      const q = String(args["query"]);
+      const emp = await prisma.employee.findFirst({
+        where: {
+          deletedAt: null,
+          OR: [
+            { firstName: { contains: q } }, { lastName: { contains: q } },
+            { employeeCode: { contains: q } }, { email: { contains: q } },
+          ],
+        },
+        select: { id: true, firstName: true, lastName: true, employeeCode: true },
+      });
+      if (!emp) return { error: `No employee found matching "${q}"` };
+      const where: Record<string, unknown> = { employeeId: emp.id };
+      if (args["year"]) where.year = Number(args["year"]);
+      const slips = await prisma.payslip.findMany({
+        where,
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+        take: 24,
+        select: { id: true, month: true, year: true, netPay: true, grossEarnings: true, totalDeductions: true, status: true, source: true },
+      });
+      const months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return {
+        employee: `${emp.firstName} ${emp.lastName} (${emp.employeeCode})`,
+        payslips: slips.map((s) => ({ period: `${months[s.month]} ${s.year}`, gross: Number(s.grossEarnings), deductions: Number(s.totalDeductions), net: Number(s.netPay), status: s.status, source: s.source })),
+      };
+    },
+  },
+
   get_org_analytics: {
     permissions: ["analytics:read_all"],
     def: {

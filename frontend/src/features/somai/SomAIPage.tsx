@@ -11,7 +11,6 @@ import {
 } from "./useSomAI";
 import { useOverview, useCelebrations } from "@/features/dashboard/useDashboard";
 import { useMyBalances } from "@/features/leave/useLeave";
-import { useHelpdeskSummary } from "@/features/helpdesk/useHelpdesk";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthStore } from "@/stores/auth";
 import { cn, formatDate } from "@/lib/utils";
