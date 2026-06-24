@@ -58,7 +58,6 @@ function CommandCenter({ onLaunch }: { onLaunch: (prompt: string) => void }) {
   const isHrView = can("analytics:read");
   const overview = useOverview();
   const celebrations = useCelebrations();
-  const helpdesk = useHelpdeskSummary(can("helpdesk:assign", "helpdesk:manage"));
   const balances = useMyBalances();
 
   const o = overview.data;

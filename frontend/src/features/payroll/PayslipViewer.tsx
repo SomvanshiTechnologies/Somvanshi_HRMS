@@ -1,11 +1,11 @@
 import * as React from "react";
 import { toast } from "sonner";
 import {
-  Banknote, CalendarCheck2, ChevronDown, Download, FileSpreadsheet, FileText, Mail,
+  Banknote, CalendarCheck2, ChevronDown, Download, FileSpreadsheet,
   TrendingDown, TrendingUp, Wallet, X,
 } from "lucide-react";
 import {
-  amountInWords, downloadPayslipCsv, openPayslipPdf, useEmailPayslip, usePayslipDetail,
+  amountInWords, downloadPayslipCsv, openPayslipPdf, usePayslipDetail,
 } from "./usePayroll";
 import { apiErrorMessage } from "@/lib/api";
 import { cn, formatDate, formatINR, initials } from "@/lib/utils";
@@ -49,7 +49,6 @@ function LineCard({ label, amount, tone }: { label: string; amount: number; tone
 
 export function PayslipViewer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const detail = usePayslipDetail(id);
-  const email = useEmailPayslip();
   const [showBreakdown, setShowBreakdown] = React.useState(false);
   const d = detail.data;
   // only show line items / sections that actually carry a value

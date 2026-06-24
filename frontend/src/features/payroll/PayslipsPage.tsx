@@ -1,7 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Download, Eye, FileText, FileUp, Mail, Pencil, Receipt, Trash2, Upload } from "lucide-react";
-import { MONTHS, openPayslipPdf, useMyPayslips, useAllPayslips, useEmailPayslip, useImportSinglePayslip, useUpdatePayslip, useDeletePayslip, useSalaryEmployees } from "./usePayroll";
+import { Download, Eye, FileText, FileUp, Pencil, Receipt, Trash2, Upload } from "lucide-react";
+import { MONTHS, openPayslipPdf, useMyPayslips, useAllPayslips, useImportSinglePayslip, useUpdatePayslip, useDeletePayslip, useSalaryEmployees } from "./usePayroll";
 import { PayslipViewer } from "./PayslipViewer";
 import { ImportDialog } from "@/features/imports/ImportDialog";
 import { ImportHistory } from "@/features/imports/ImportHistory";
@@ -27,8 +27,6 @@ export function PayslipsPage() {
   const myPayslips = useMyPayslips();
   const allPayslips = useAllPayslips();
   const payslips = isAdmin ? allPayslips : myPayslips;
-  const emailPayslip = useEmailPayslip();
-  const [emailingId, setEmailingId] = React.useState<string | null>(null);
   const singleImport = useImportSinglePayslip();
   const updatePayslip = useUpdatePayslip();
   const deletePayslip = useDeletePayslip();
