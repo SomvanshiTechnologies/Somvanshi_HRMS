@@ -59,6 +59,7 @@ function CommandCenter({ onLaunch }: { onLaunch: (prompt: string) => void }) {
   const overview = useOverview();
   const celebrations = useCelebrations();
   const balances = useMyBalances();
+  const helpdeskSummary = useHelpdeskSummary(true);
 
   const o = overview.data;
   const birthdaysToday = (celebrations.data?.birthdays ?? []).filter((b) => b.isToday).length;
@@ -79,16 +80,17 @@ function CommandCenter({ onLaunch }: { onLaunch: (prompt: string) => void }) {
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-wide text-text-faint mb-2.5">Today's Summary</p>
         {overview.isLoading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
         ) : isHrView && o ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <SummaryStat icon={Users} label="Present today" value={o.presentToday} accent="bg-success-bg text-success" />
             <SummaryStat icon={CalendarCheck2} label="On leave" value={o.onLeaveToday} accent="bg-warning-bg text-warning" />
             <SummaryStat icon={ClipboardCheck} label="Pending approvals" value={o.pendingLeaveRequests} accent="bg-info-bg text-info" />
             <SummaryStat icon={Cake} label="Birthdays today" value={birthdaysToday} accent="bg-primary/10 text-primary dark:text-chart-3" />
+            <SummaryStat icon={LifeBuoy} label="Open Tickets" value={helpdeskSummary.data?.open ?? 0} accent="bg-info-bg text-info" />
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {(balances.data ?? []).slice(0, 3).map((b) => (
               <SummaryStat key={b.leaveType.id} icon={CalendarPlus} label={`${b.leaveType.name} left`} value={b.available} accent="bg-primary/10 text-primary dark:text-chart-3" />
             ))}
