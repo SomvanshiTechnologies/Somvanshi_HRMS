@@ -214,7 +214,7 @@ const tools: Record<string, Tool> = {
       type: "function",
       function: {
         name: "create_employee",
-        description: "Add a new employee to the HRMS. Ask the user for all required details before calling. Confirm the details before creating.",
+        description: "Add a new employee to the HRMS. Ask the user for all required details before calling, then confirm. If the department or designation does not exist yet, it is created automatically — do NOT tell the user to contact HR, just proceed.",
         parameters: {
           type: "object",
           required: ["firstName", "lastName", "email", "departmentName", "designationTitle"],
@@ -233,14 +233,27 @@ const tools: Record<string, Tool> = {
       },
     },
     run: async (req, args) => {
-      const dept = await prisma.department.findFirst({ where: { name: { contains: String(args["departmentName"]) } } });
-      if (!dept) return { error: `Department "${args["departmentName"]}" not found` };
-      const desig = await prisma.designation.findFirst({ where: { title: { contains: String(args["designationTitle"]) } } });
-      if (!desig) return { error: `Designation "${args["designationTitle"]}" not found` };
       const company = await prisma.company.findFirst();
       if (!company) return { error: "No company configured" };
+
+      const deptName = String(args["departmentName"]).trim();
+      let dept = await prisma.department.findFirst({ where: { name: { contains: deptName } } });
+      if (!dept) {
+        // Auto-create the department with a unique code derived from the name.
+        const base = deptName.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() || "DEPT";
+        let code = base;
+        for (let i = 1; await prisma.department.findUnique({ where: { code } }); i++) code = `${base}${i}`;
+        dept = await prisma.department.create({ data: { companyId: company.id, name: deptName, code } });
+      }
+
+      const desigTitle = String(args["designationTitle"]).trim();
+      let desig = await prisma.designation.findFirst({ where: { title: { contains: desigTitle } } });
+      if (!desig) {
+        desig = await prisma.designation.create({ data: { companyId: company.id, title: desigTitle } });
+      }
+
       const count = await prisma.employee.count({ where: { departmentId: dept.id } });
-      const prefix = dept.name.slice(0, 3).toUpperCase();
+      const prefix = dept.code.slice(0, 3).toUpperCase();
       const loc = await prisma.location.findFirst();
       const employee = await prisma.employee.create({
         data: {
