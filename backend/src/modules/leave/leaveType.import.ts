@@ -136,11 +136,11 @@ export const leaveTypeImporter: Importer<LeaveTypeImportRow> = {
             leaveTypeId: type.id,
             name: `${d.name} — Standard`,
             annualQuota: d.annualQuota,
-            accrualFrequency: d.accrualFrequency,
+            accrualFrequency: d.accrualFrequency as "MONTHLY" | "YEARLY" | "QUARTERLY" | "NONE",
             maxCarryForward: d.maxCarryForward,
             noticeDays: d.noticeDays,
             requiresDocument: d.requiresDocument,
-            genderRestriction: d.genderRestriction,
+            genderRestriction: d.genderRestriction as "MALE" | "FEMALE" | null,
             maxConsecutiveDays: d.maxConsecutiveDays,
           },
         });

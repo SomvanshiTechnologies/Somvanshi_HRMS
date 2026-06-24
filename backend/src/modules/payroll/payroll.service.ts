@@ -10,8 +10,10 @@ import { renderPayslipPdf } from "./payslip.pdf.js";
 import { storeUpload, fileUrl } from "../files/files.routes.js";
 import { getObject } from "../files/storage.js";
 import { brandingService } from "../branding/branding.service.js";
+import { Prisma } from "../../generated/prisma/client.js";
 import { decryptSafe } from "../../core/fieldCrypto.js";
 import { formatDate } from "../../shared/format.js";
+import type { PayslipEditInput, ManualPayslipInput } from "./payroll.schema.js";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -61,7 +63,7 @@ export const payrollService = {
     const current = await this.getStatutoryConfigRow();
     const updated = await prisma.payrollStatutoryConfig.update({
       where: { id: current.id },
-      data: { ...input, tdsSlabs: input["tdsSlabs"] === undefined ? undefined : (input["tdsSlabs"] as object | null), updatedBy: req.user!.id },
+      data: { ...(input as Record<string, unknown>), tdsSlabs: input["tdsSlabs"] === undefined ? undefined : (input["tdsSlabs"] ?? Prisma.DbNull) as Prisma.InputJsonValue, updatedBy: req.user!.id },
     });
     audit({ action: "payroll.statutory_update", entity: "PayrollStatutoryConfig", entityId: updated.id, before: current, after: updated, req });
     return updated;

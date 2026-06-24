@@ -236,10 +236,10 @@ export const leaveService = {
     if (policy?.genderRestriction && policy.genderRestriction !== employee.gender) {
       throw new BadRequestError(`${leaveType.name} is not applicable to your profile`);
     }
-    if (policy?.minServiceMonths && employee.dateOfJoining) {
-      const monthsServed = Math.floor((Date.now() - new Date(employee.dateOfJoining).getTime()) / (30.44 * 86400000));
-      if (monthsServed < policy.minServiceMonths) {
-        throw new BadRequestError(`${leaveType.name} requires at least ${policy.minServiceMonths} months of service`);
+    if (policy?.minServiceDays && employee.dateOfJoining) {
+      const daysServed = Math.floor((Date.now() - new Date(employee.dateOfJoining).getTime()) / 86400000);
+      if (daysServed < policy.minServiceDays) {
+        throw new BadRequestError(`${leaveType.name} requires at least ${policy.minServiceDays} days of service`);
       }
     }
     if (policy?.requiresDocument && !input.documentUrl) {
