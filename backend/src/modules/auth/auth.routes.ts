@@ -3,10 +3,13 @@ import { authController } from "./auth.controller.js";
 import { asyncHandler } from "../../shared/asyncHandler.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth, requireLiveSession } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/rbac.middleware.js";
+import { PERMISSIONS } from "../../shared/permissions.js";
 import { authLimiter } from "../../middleware/rateLimit.middleware.js";
 import {
   ChangePasswordSchema,
   ForgotPasswordSchema,
+  ImpersonateSchema,
   LoginSchema,
   ResetPasswordSchema,
   TwoFactorLoginSchema,
@@ -25,6 +28,17 @@ authRouter.post("/reset-password", authLimiter, validate({ body: ResetPasswordSc
 // authenticated
 authRouter.post("/logout", requireAuth, asyncHandler(authController.logout));
 authRouter.get("/me", requireAuth, asyncHandler(authController.me));
+
+// admin/service-account token-exchange: mint a short-lived token scoped to an
+// employee, so the caller can act on their behalf via the existing /me routes
+authRouter.post(
+  "/impersonate",
+  requireAuth,
+  requireLiveSession,
+  requirePermission(PERMISSIONS.AUTH_IMPERSONATE),
+  validate({ body: ImpersonateSchema }),
+  asyncHandler(authController.impersonate)
+);
 authRouter.post("/change-password", requireAuth, requireLiveSession, validate({ body: ChangePasswordSchema }), asyncHandler(authController.changePassword));
 
 authRouter.post("/2fa/setup", requireAuth, requireLiveSession, asyncHandler(authController.setupTwoFactor));

@@ -6,6 +6,7 @@ import { UnauthorizedError } from "../../core/errors.js";
 import type {
   ChangePasswordInput,
   ForgotPasswordInput,
+  ImpersonateInput,
   LoginInput,
   ResetPasswordInput,
   TwoFactorLoginInput,
@@ -69,6 +70,17 @@ export const authController = {
 
   async me(req: Request, res: Response): Promise<void> {
     ok(res, await authService.me(req.user!.id));
+  },
+
+  async impersonate(req: Request, res: Response): Promise<void> {
+    const { employeeId } = req.body as ImpersonateInput;
+    const caller = req.user!;
+    const result = await authService.impersonate(
+      { userId: caller.id, sessionId: caller.sessionId, roles: caller.roles },
+      employeeId,
+      req
+    );
+    ok(res, result);
   },
 
   async forgotPassword(req: Request, res: Response): Promise<void> {

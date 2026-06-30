@@ -22,6 +22,10 @@ const EnvSchema = z.object({
   FIELD_ENCRYPTION_KEY: z.string().optional().default(""),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("7d"),
+  // Lifetime (seconds) of an impersonation access token minted via
+  // POST /auth/impersonate. Kept short — it carries read+write rights for the
+  // target employee. Default 10 minutes.
+  IMPERSONATION_TTL_SECONDS: z.coerce.number().int().positive().max(3600).default(600),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().default(30),
   ACCOUNT_LOCK_THRESHOLD: z.coerce.number().default(5),
   ACCOUNT_LOCK_MINUTES: z.coerce.number().default(15),

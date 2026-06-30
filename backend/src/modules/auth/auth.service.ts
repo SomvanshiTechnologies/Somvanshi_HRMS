@@ -307,6 +307,84 @@ export const authService = {
     return { accessToken, refreshToken: newRefresh };
   },
 
+  /**
+   * Admin impersonation / token-exchange. A caller holding `auth:impersonate`
+   * mints a short-lived access token scoped to a target employee, so a service
+   * account (e.g. the self-service chatbot) can read and act on that employee's
+   * behalf through the existing `/me` routes — with correct attribution.
+   *
+   * Scoping is least-privilege and fully DB-driven:
+   *  - `sub`/`roles` resolve to the TARGET employee's own login when they have an
+   *    active one, so the token can only do what that employee could do and the
+   *    audit actor is the employee themselves;
+   *  - if the employee has no usable login, it falls back to the privileged
+   *    caller so the bot can still act, while `employeeId` still points at the
+   *    target so every `/me` query and write is filed under them.
+   * The token always carries `impersonatedBy` (the caller) for traceability.
+   */
+  async impersonate(
+    caller: { userId: string; sessionId: string; roles: string[] },
+    employeeId: string,
+    req?: Request
+  ): Promise<{
+    accessToken: string;
+    expiresIn: number;
+    actingFor: { employeeId: string; employeeCode: string; name: string };
+  }> {
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, deletedAt: null },
+      select: {
+        id: true,
+        employeeCode: true,
+        firstName: true,
+        lastName: true,
+        displayName: true,
+        user: {
+          select: {
+            id: true,
+            status: true,
+            roles: { select: { role: { select: { name: true } } } },
+          },
+        },
+      },
+    });
+    if (!employee) throw new NotFoundError("Employee");
+
+    const login = employee.user;
+    const usableLogin =
+      login && !["SUSPENDED", "DEACTIVATED", "LOCKED"].includes(login.status) ? login : null;
+
+    const sub = usableLogin?.id ?? caller.userId;
+    const roles = usableLogin ? usableLogin.roles.map((r) => r.role.name) : caller.roles;
+
+    const accessToken = tokenService.signAccessToken(
+      {
+        sub,
+        employeeId: employee.id,
+        roles,
+        sessionId: caller.sessionId,
+        impersonatedBy: caller.userId,
+      },
+      env.IMPERSONATION_TTL_SECONDS
+    );
+
+    audit({
+      userId: caller.userId,
+      action: "auth.impersonate",
+      entity: "Employee",
+      entityId: employee.id,
+      after: { actingForUserId: sub, employeeCode: employee.employeeCode },
+      req,
+    });
+
+    const name = (employee.displayName ?? `${employee.firstName} ${employee.lastName}`).trim();
+    return {
+      accessToken,
+      expiresIn: env.IMPERSONATION_TTL_SECONDS,
+      actingFor: { employeeId: employee.id, employeeCode: employee.employeeCode, name },
+    };
+  },
+
   async logout(userId: string, sessionId: string, req?: Request): Promise<void> {
     await prisma.$transaction([
       prisma.session.updateMany({ where: { id: sessionId, userId }, data: { revokedAt: new Date() } }),
