@@ -132,6 +132,9 @@ export const PERMISSIONS = {
   AI_MANAGE: "ai:manage",
   AUDIT_READ_ALL: "audit:read_all",
   SETTINGS_MANAGE: "settings:manage",
+  // Mint a short-lived token scoped to another employee (admin impersonation /
+  // token-exchange) — e.g. a service account acting on a chat user's behalf.
+  AUTH_IMPERSONATE: "auth:impersonate",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -278,6 +281,7 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleName, PermissionCode[]> = {
     P.ANALYTICS_READ_ALL,
     P.AI_MANAGE,
     P.AUDIT_READ_ALL,
+    P.AUTH_IMPERSONATE, // act on an employee's behalf (e.g. self-service chatbot)
   ],
 
   HR_EXECUTIVE: [

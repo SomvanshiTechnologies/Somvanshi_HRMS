@@ -8,6 +8,9 @@ export interface AuthUser {
   employeeId: string | null;
   roles: string[];
   sessionId: string;
+  /** Set when the caller is acting via an impersonation token: the userId of the
+   *  privileged service account that minted it. Undefined for normal sessions. */
+  impersonatedBy?: string;
 }
 
 declare module "express-serve-static-core" {
@@ -32,6 +35,7 @@ export const requireAuth: RequestHandler = (req: Request, _res: Response, next: 
     employeeId: payload.employeeId,
     roles: payload.roles,
     sessionId: payload.sessionId,
+    ...(payload.impersonatedBy ? { impersonatedBy: payload.impersonatedBy } : {}),
   };
   next();
 };

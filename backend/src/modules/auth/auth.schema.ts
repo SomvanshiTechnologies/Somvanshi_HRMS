@@ -2,7 +2,9 @@ import { z } from "zod";
 
 export const LoginSchema = z.object({
   email: z.email().toLowerCase(),
-  password: z.string().min(8).max(128),
+  // trim: stray leading/trailing spaces from paste/autofill must not cause a
+  // spurious "Invalid email or password"
+  password: z.string().trim().min(8).max(128),
   deviceFingerprint: z.string().max(128).optional(),
   deviceName: z.string().max(120).optional(),
 });
@@ -36,6 +38,12 @@ export const TwoFactorVerifySchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
 });
 
+export const ImpersonateSchema = z.object({
+  /** Internal employee id (cuid) of the target — resolve via GET /employees?search= */
+  employeeId: z.string().min(1),
+});
+
+export type ImpersonateInput = z.infer<typeof ImpersonateSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type TwoFactorLoginInput = z.infer<typeof TwoFactorLoginSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;

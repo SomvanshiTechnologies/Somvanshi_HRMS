@@ -9,6 +9,9 @@ export interface AccessTokenPayload {
   roles: string[];
   sessionId: string;
   type: "access";
+  /** Present only on impersonation tokens: userId of the privileged caller who
+   *  minted this token to act on the target employee's behalf. */
+  impersonatedBy?: string;
 }
 
 export interface RefreshTokenPayload {
@@ -22,8 +25,12 @@ const accessOpts: SignOptions = { expiresIn: env.JWT_ACCESS_TTL as SignOptions["
 const refreshOpts: SignOptions = { expiresIn: env.JWT_REFRESH_TTL as SignOptions["expiresIn"] };
 
 export const tokenService = {
-  signAccessToken(payload: Omit<AccessTokenPayload, "type">): string {
-    return jwt.sign({ ...payload, type: "access" }, env.JWT_ACCESS_SECRET, accessOpts);
+  signAccessToken(
+    payload: Omit<AccessTokenPayload, "type">,
+    expiresIn?: SignOptions["expiresIn"]
+  ): string {
+    const opts: SignOptions = expiresIn !== undefined ? { expiresIn } : accessOpts;
+    return jwt.sign({ ...payload, type: "access" }, env.JWT_ACCESS_SECRET, opts);
   },
 
   signRefreshToken(payload: Omit<RefreshTokenPayload, "type">): string {
